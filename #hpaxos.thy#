@@ -130,6 +130,7 @@ fun Tran :: "PreMessage \<Rightarrow> PreMessage set" where
 (* ------------------------------------------------------------------- *)
 
 
+
 (*
 11. bb
 bb is a natural number since it's compared to Ballot

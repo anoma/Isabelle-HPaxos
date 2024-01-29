@@ -77,7 +77,7 @@ axiomatization where
 
 (*consts MaxMessageDepth :: nat*)
 
-(*type_synonym MessageDepthRange = nat*)
+type_synonym MessageDepthRange = nat
 
 (*
 Morally, messages have the following inductive structure
@@ -105,29 +105,9 @@ proof
     by simp
 qed
 
-fun ref :: "PreMessage \<Rightarrow> PreMessage set" where
-  "ref (T1a _) = {}" |
-  "ref (T1b (_, msgs)) = set msgs" |
-  "ref (T2a (_, _, msgs)) = set msgs"  
-
 (* Transitive references *)
 (* ------------------------------------------------------------------- *)
 
-(*If we always want TranDepthRange to be finite, we can simply do*)
-fun TranF :: "nat \<Rightarrow> PreMessage \<Rightarrow> PreMessage set" where
-  "TranF 0 m = {m}" |
-  "TranF n (T1a a) = {T1a a}" |
-  "TranF n (T1b (a, msgs)) = {T1b (a, msgs)} \<union> \<Union> (TranF (n-1) ` set msgs)" |
-  "TranF n (T2a (a, l, msgs)) = {T2a (a, l, msgs)} \<union> \<Union> (TranF (n-1) ` set msgs)"  
-
-(* This is Tran as it actually is in the original file *)
-fun Tran :: "PreMessage \<Rightarrow> PreMessage set" where
-  "Tran (T1a a) = {T1a a}" |
-  "Tran (T1b (a, msgs)) = {T1b (a, msgs)} \<union> \<Union> (Tran ` set msgs)" |
-  "Tran (T2a (a, l, msgs)) = {T2a (a, l, msgs)} \<union> \<Union> (Tran ` set msgs)"  
-
-(* Algorithm specification *)
-(* ------------------------------------------------------------------- *)
 
 
 (*
