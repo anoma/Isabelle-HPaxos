@@ -20,22 +20,22 @@ typedef FakeAcceptor = "{a::Acceptor. \<not> is_safe a}"
 type_synonym Ballot = nat
 consts LastBallot :: Ballot
 
-consts is_quorum :: "(Acceptor \<Rightarrow> bool) \<Rightarrow> bool"
+consts is_quorum :: "Acceptor set \<Rightarrow> bool"
 
 axiomatization where
-  safe_is_quorum: "is_quorum is_safe"
+  safe_is_quorum: "is_quorum {x . is_safe x}"
 
-typedef (overloaded) ByzQuorum = "{a::Acceptor \<Rightarrow> bool. is_quorum a}"
+typedef (overloaded) ByzQuorum = "{a::Acceptor set. is_quorum a}"
 proof
-  show "is_safe \<in> {a::Acceptor \<Rightarrow> bool. is_quorum a}"
+  show "{x . is_safe x} \<in> {a::Acceptor set. is_quorum a}"
     using safe_is_quorum by simp
 qed
 
 (* Learner graph *)
 (* ------------------------------------------------------------------- *)
 
-consts TrustLive :: "Learner \<Rightarrow> (Acceptor \<Rightarrow> bool) \<Rightarrow> bool"
-consts TrustSafe :: "Learner \<Rightarrow> Learner \<Rightarrow> (Acceptor \<Rightarrow> bool) \<Rightarrow> bool"
+consts TrustLive :: "Learner \<Rightarrow> Acceptor set \<Rightarrow> bool"
+consts TrustSafe :: "Learner \<Rightarrow> Learner \<Rightarrow> Acceptor set \<Rightarrow> bool"
 
 axiomatization where
   TrustLiveAssumption: "\<forall>l q. TrustLive l q \<Longrightarrow> is_quorum q"
@@ -53,7 +53,7 @@ axiomatization where
 
 axiomatization where
   LearnerGraphAssumptionClosure:
-    "\<forall>l1 l2 q Q. TrustSafe l1 l2 q \<and> is_quorum Q \<and> (\<forall>a . q a \<longrightarrow> Q a) \<Longrightarrow> TrustSafe l1 l2 q2"
+    "\<forall>l1 l2 q Q. TrustSafe l1 l2 q \<and> is_quorum Q \<and> q \<subseteq> Q \<Longrightarrow> TrustSafe l1 l2 q2"
 
 axiomatization where
   LearnerGraphAssumptionValidity:
@@ -64,7 +64,7 @@ axiomatization where
 
 (* Entanglement relation *)
 definition ent :: "Learner \<Rightarrow> Learner \<Rightarrow> bool" where
-  "ent l1 l2 = TrustSafe l1 l2 is_safe"
+  "ent l1 l2 = TrustSafe l1 l2 {x . is_safe x}"
 
 (* Messages *)
 (* ------------------------------------------------------------------- *)
@@ -248,10 +248,10 @@ fun CaughtMsg :: "PreMessage \<Rightarrow> PreMessage set" where
 fun Caught :: "PreMessage \<Rightarrow> Acceptor set" where
   "Caught x = acc ` { m . m \<in> CaughtMsg x }"
 
-fun ConByQuorum :: "Learner \<Rightarrow> Learner \<Rightarrow> PreMessage \<Rightarrow> (Acceptor \<Rightarrow> bool) \<Rightarrow> bool" where
+fun ConByQuorum :: "Learner \<Rightarrow> Learner \<Rightarrow> PreMessage \<Rightarrow> Acceptor set \<Rightarrow> bool" where
   "ConByQuorum a b x S = (
       TrustSafe a b S \<and> 
-      (\<forall> a \<in> Caught x. \<not> (S a))
+      Caught x \<inter> S = {}
     )"
 
 fun Con :: "Learner \<Rightarrow> PreMessage \<Rightarrow> Learner set" where
@@ -276,7 +276,7 @@ fun Buried :: "State \<Rightarrow> PreMessage \<Rightarrow> PreMessage \<Rightar
                       V st x vx \<and> V st z vz \<longrightarrow> vx \<noteq> vz
                   )
             ) }
-     in TrustLive (lrn x) (\<lambda>a . a \<in> acc ` Q)
+     in TrustLive (lrn x) (acc ` Q)
     )
   "
 
@@ -298,18 +298,70 @@ fun Fresh :: "State \<Rightarrow> Learner \<Rightarrow> PreMessage \<Rightarrow>
 
 (* Quorum of messages referenced by 2a *)
 fun q :: "State \<Rightarrow> PreMessage \<Rightarrow> Acceptor set" where
-  "q st x = (
-    let Q = { m . m \<in> Tran x
+  "q st x =
+    acc ` { m . m \<in> Tran x
                 \<and> type m = T1b
                 \<and> Fresh st (lrn x) m
                 \<and> (\<forall>b :: Ballot. B m b = B x b)
-            }
-    in acc ` Q
+          }"
+
+fun WellFormed :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "WellFormed st m = (
+    isValidMessage m
+    \<and> (\<exists> b :: Ballot. B m b)
+    \<and> (type m = T1b \<longrightarrow> (\<forall>y \<in> Tran m. m \<noteq> y \<and> SameBallot m y \<longrightarrow> type y = T1a))
+    \<and> (type m = T2a \<longrightarrow> TrustLive (lrn m) (q st m))
   )"
 
 
+(*Transition Functions*)
+
+(*Send(m) == msgs' = msgs \cup {m}*)
+fun Send :: "PreMessage \<Rightarrow> State \<Rightarrow> State" where
+  "Send m st = st\<lparr>msgs := m # msgs st\<rparr>"
+
+(*Proper(a, m) == \A r \in m.ref : r \in known_msgs[a]*)
+fun Proper :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Proper st a m = (\<forall> r \<in> ref m. r \<in> set (known_msgs_acc st a))"
+
+fun Recv :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Recv st a m = (
+    m \<notin> set (known_msgs_acc st a)
+    \<and> WellFormed st m
+    \<and> Proper st a m
+  )"
+
+fun Store :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State" where 
+  "Store a m st =
+    st\<lparr>known_msgs_acc := 
+        \<lambda>x. if a = x 
+            then m # known_msgs_acc st x
+            else known_msgs_acc st x \<rparr>
+  "
+
+fun Send1a :: "Ballot \<Rightarrow> State \<Rightarrow> State" where
+  "Send1a b = Send (M1a b)"
+
+fun Known2a :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
+  "Known2a st l b v = 
+    {x . x \<in> set (known_msgs_lrn st l) 
+      \<and> type x = T2a 
+      \<and> lrn x = l 
+      \<and> B x b 
+      \<and> V st x v  }"
+
+(*
+The following is invariant for queued_msg variable values.
+For any safe acceptor A, if queued_msg[A] # NoMessage then
+queued_msg[A] is a well-formed message of type "1b" sent by A,
+having the direct references all known to A.
+*)
 
 
+
+(*
+
+*)
 
 (*
 11. bb
