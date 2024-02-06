@@ -185,8 +185,8 @@ record State =
   recent_msgs_lrn :: "Learner \<Rightarrow> PreMessage list"
   queued_msg :: "Acceptor \<Rightarrow> PreMessage option"
   two_a_lrn_loop :: "Acceptor \<Rightarrow> bool"
-  processed_lrns :: "Acceptor \<Rightarrow> Learner list"
-  decision :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value list"
+  processed_lrns :: "Acceptor \<Rightarrow> Learner set"
+  decision :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value set"
   BVal :: "Ballot \<Rightarrow> Value"
 
 definition NoMessage :: "PreMessage option" where
@@ -201,8 +201,8 @@ fun Init :: "(Ballot \<Rightarrow> Value) \<Rightarrow> State" where
       recent_msgs_lrn = (\<lambda>_. []), 
       queued_msg = (\<lambda>_. NoMessage), 
       two_a_lrn_loop = (\<lambda>_. False), 
-      processed_lrns = (\<lambda>_. []), 
-      decision = (\<lambda>_ _. []), 
+      processed_lrns = (\<lambda>_. {}), 
+      decision = (\<lambda>_ _. {}), 
       BVal = bval 
     \<rparr>"
 
@@ -317,30 +317,52 @@ fun WellFormed :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
 (*Transition Functions*)
 
 (*Send(m) == msgs' = msgs \cup {m}*)
-fun Send :: "PreMessage \<Rightarrow> State \<Rightarrow> State" where
-  "Send m st = st\<lparr>msgs := m # msgs st\<rparr>"
+fun Send :: "PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Send m st st2 = (msgs st2 = m # msgs st)"
 
-(*Proper(a, m) == \A r \in m.ref : r \in known_msgs[a]*)
-fun Proper :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
-  "Proper st a m = (\<forall> r \<in> ref m. r \<in> set (known_msgs_acc st a))"
+(*Proper_acc(a, m) == \A r \in m.ref : r \in known_msgs[a]*)
+fun Proper_acc :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Proper_acc st a m = (\<forall> r \<in> ref m. r \<in> set (known_msgs_acc st a))"
 
-fun Recv :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
-  "Recv st a m = (
+fun Proper_lrn :: "State \<Rightarrow> Learner \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Proper_lrn st l m = (\<forall> r \<in> ref m. r \<in> set (known_msgs_lrn st l))"
+
+fun Recv_acc :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Recv_acc st a m = (
     m \<notin> set (known_msgs_acc st a)
     \<and> WellFormed st m
-    \<and> Proper st a m
+    \<and> Proper_acc st a m
   )"
 
-fun Store :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State" where 
-  "Store a m st =
-    st\<lparr>known_msgs_acc := 
+fun Recv_lrn :: "State \<Rightarrow> Learner \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "Recv_lrn st l m = (
+    m \<notin> set (known_msgs_lrn st l)
+    \<and> WellFormed st m
+    \<and> Proper_lrn st l m
+  )"
+
+fun Store_acc :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where 
+  "Store_acc a m st st2 = (
+    known_msgs_acc st2 = (
         \<lambda>x. if a = x 
             then m # known_msgs_acc st x
-            else known_msgs_acc st x \<rparr>
-  "
+            else known_msgs_acc st x
+    )
+    \<and> known_msgs_lrn st2 = known_msgs_lrn st
+  )"
 
-fun Send1a :: "Ballot \<Rightarrow> State \<Rightarrow> State" where
-  "Send1a b = Send (M1a b)"
+fun Store_lrn :: "Learner \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where 
+  "Store_lrn l m st st2 = (
+    known_msgs_lrn st2 = (
+        \<lambda>x. if l = x 
+            then m # known_msgs_lrn st x
+            else known_msgs_lrn st x
+    )
+    \<and> known_msgs_acc st2 = known_msgs_acc st
+  )"
+
+fun Send1a :: "Ballot \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Send1a b st st2 = (st2 = st\<lparr>msgs := M1a b # msgs st\<rparr>)"
 
 fun Known2a :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
   "Known2a st l b v = 
@@ -357,22 +379,303 @@ queued_msg[A] is a well-formed message of type "1b" sent by A,
 having the direct references all known to A.
 *)
 
+(*Process1a, Process1b, and Process2a rolled into a function*)
+fun Process :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State" where
+  "Process a m st = (
+    if \<not> (Recv_acc st a m)
+    then st
+    else let stp = 
+      st\<lparr>known_msgs_acc := 
+          \<lambda>x. if a = x 
+              then m # known_msgs_acc st x
+              else known_msgs_acc st x\<rparr> in
+    case m of
+      M1a a2 \<Rightarrow> 
+        let new1b = M1b a (m # recent_msgs_acc st a) in 
+        if WellFormed st new1b
+        then stp\<lparr>msgs := new1b # msgs st,
+                 recent_msgs_acc := 
+                   \<lambda>x. if x = a 
+                       then [] 
+                       else recent_msgs_acc st x,
+                 queued_msg := 
+                   \<lambda>x. if x = a 
+                       then Some new1b 
+                       else queued_msg st x\<rparr>
+        else stp\<lparr>recent_msgs_acc :=
+                   \<lambda>x. if x = a 
+                       then m # recent_msgs_acc st x 
+                       else recent_msgs_acc st x\<rparr>
+    | M1b a2 ms \<Rightarrow> 
+        let stpp = 
+          stp\<lparr>queued_msg := 
+                  \<lambda>x. if x = a
+                      then None
+                      else queued_msg st x,
+              recent_msgs_acc :=
+                  \<lambda>x. if x = a 
+                      then m # recent_msgs_acc st x 
+                      else recent_msgs_acc st x\<rparr> in
+        if \<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)
+        then stpp
+        else stpp\<lparr>two_a_lrn_loop := 
+                    \<lambda>x. if x = a
+                        then True
+                        else two_a_lrn_loop st x,
+                  processed_lrns :=
+                    \<lambda>x. if x = a
+                        then {}
+                        else processed_lrns st x\<rparr>
+    | M2a a2 l ms \<Rightarrow> 
+        stp\<lparr>recent_msgs_acc :=
+                \<lambda>x. if x = a 
+                    then m # recent_msgs_acc st x 
+                    else recent_msgs_acc st x\<rparr>
+  )"
+
+(* Process1a as a predicate *)
+fun Process1a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process1a a m st st2 = (
+    let new1b = M1b a (m # recent_msgs_acc st a) in 
+    type m = T1a
+    \<and> Recv_acc st a m
+    \<and> Store_acc a m st st2
+    \<and> (if WellFormed st new1b
+       then 
+          Send new1b st st2
+          \<and> (recent_msgs_acc st2 = (
+              \<lambda>a2. if a2 = a then [] 
+                             else recent_msgs_acc st a2))
+          \<and> (queued_msg st2 = (
+              \<lambda>a2. if a2 = a then Some new1b 
+                             else queued_msg st a2))
+       else 
+          (recent_msgs_acc st2 = (
+              \<lambda>a2. if a2 = a then m # recent_msgs_acc st a2 
+                             else recent_msgs_acc st a2))
+          \<and> (msgs st = msgs st2)
+          \<and> (queued_msg st = queued_msg st2)
+      )
+
+    \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
+    \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
+    \<and> (processed_lrns st2 = processed_lrns st)
+    \<and> (decision st2 = decision st)
+    \<and> (BVal st2 = BVal st)
+  )"
+
+(* Process1b as a predicate *)
+fun Process1b :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process1b a m st st2 = (
+    type m = T1b
+    \<and> Recv_acc st a m
+    \<and> Store_acc a m st st2
+    \<and> recent_msgs_acc st2 = (
+        \<lambda>x. if x = a 
+            then m # recent_msgs_acc st x
+            else recent_msgs_acc st x )
+    \<and> recent_msgs_lrn st2 = recent_msgs_lrn st
+    \<and> ((\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
+        two_a_lrn_loop st2 = (\<lambda>x.
+          if x = a
+          then True
+          else two_a_lrn_loop st x)
+        \<and> processed_lrns st2 = (\<lambda>x.
+          if x = a
+          then {}
+          else processed_lrns st x)
+      )
+    \<and> (\<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
+        two_a_lrn_loop st2 = two_a_lrn_loop st
+        \<and> processed_lrns st2 = processed_lrns st
+      )
+    \<and> (queued_msg st2 = (\<lambda>x.
+          if x = a
+          then None
+          else queued_msg st x))
+
+    \<and> (msgs st2 = msgs st)
+    \<and> (decision st2 = decision st)
+    \<and> (BVal st2 = BVal st)
+  )"
+
+(* Process2a as a predicate *)
+fun Process2a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process2a a m st st2 = (
+    type m = T2a
+    \<and> Recv_acc st a m
+    \<and> Store_acc a m st st2
+    \<and> recent_msgs_acc st2 = (
+        \<lambda>x. if x = a 
+            then m # recent_msgs_acc st x
+            else recent_msgs_acc st x )
+    \<and> recent_msgs_lrn st2 = recent_msgs_lrn st
+
+    \<and> (msgs st2 = msgs st)
+    \<and> (queued_msg st2 = queued_msg st)
+    \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
+    \<and> (processed_lrns st2 = processed_lrns st)
+    \<and> (decision st2 = decision st)
+    \<and> (BVal st2 = BVal st)
+  )"
+
+fun ProposerSendAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "ProposerSendAction st st2 = (\<exists>bal :: Ballot. Send1a bal st st2)"
+
+fun Process1bLearnerLoopStep :: "Acceptor \<Rightarrow> Learner \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process1bLearnerLoopStep a ln st st2 = (
+    let new2a = M2a ln a (recent_msgs_acc st a) in
+    processed_lrns st2 = (
+      \<lambda>x . if x = a
+           then {ln} \<union> processed_lrns st x
+           else processed_lrns st x)
+    \<and> (if (WellFormed st new2a)
+       then (
+            Send new2a st st2
+          \<and> Store_acc a new2a st st2
+          \<and> (recent_msgs_acc st2 = (
+              \<lambda>x . if x = a
+                 then [new2a]
+                 else recent_msgs_acc st x))
+          \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
+          )
+       else (
+            (msgs st2 = msgs st)
+          \<and> (known_msgs_acc st2 = known_msgs_acc st)
+          \<and> (known_msgs_lrn st2 = known_msgs_lrn st)
+          \<and> (recent_msgs_acc st2 = recent_msgs_acc st)
+          \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
+          )
+       )
+
+    \<and> (queued_msg st2 = queued_msg st)
+    \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
+    \<and> (decision st2 = decision st)
+    \<and> (BVal st2 = BVal st)
+  )"
+
+(*Process1bLearnerLoopStep as a function*)
+fun Process1bLearnerLoopStepFun :: "Acceptor \<Rightarrow> Learner \<Rightarrow> State \<Rightarrow> State" where
+  "Process1bLearnerLoopStepFun a ln st = (
+    let stp = st\<lparr>processed_lrns := (
+                  \<lambda>x . if x = a
+                       then {ln} \<union> processed_lrns st x
+                       else processed_lrns st x)\<rparr>;
+        new2a = M2a ln a (recent_msgs_acc st a) in
+    if \<not> (WellFormed st new2a)
+    then stp
+    else 
+      stp\<lparr>msgs := new2a # msgs st,
+          known_msgs_acc := (
+              \<lambda>x. if a = x 
+                  then new2a # known_msgs_acc st x
+                  else known_msgs_acc st x),
+          recent_msgs_acc := (
+              \<lambda>x . if x = a
+                 then [new2a]
+                 else recent_msgs_acc st x)\<rparr>
+  )"
+
+fun Process1bLearnerLoopDone :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process1bLearnerLoopDone a st st2 = (
+    (\<forall>ln :: Learner. ln \<in> processed_lrns st a)
+    \<and> st2 = st\<lparr>two_a_lrn_loop := 
+                \<lambda>x. if x = a
+                    then False
+                    else two_a_lrn_loop st x
+        \<rparr>)"
+
+fun Process1bLearnerLoop :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "Process1bLearnerLoop a st st2 = (
+    (\<exists>ln :: Learner. ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2)
+    \<or> Process1bLearnerLoopDone a st st2
+  )"
+
+fun AcceptorProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "AcceptorProcessAction st st2 = (
+    \<exists>a :: Acceptor. is_safe a \<and> (
+      (\<not> two_a_lrn_loop st a \<and>
+       ((queued_msg st a \<noteq> None \<and> 
+         Process1b a (the (queued_msg st a)) st st2) \<or> 
+        (queued_msg st a = None \<and> (
+          \<exists>m :: PreMessage. Process1a a m st st2 \<or> Process1b a m st st2
+        ))))
+      \<or> (two_a_lrn_loop st a \<and> 
+         Process1bLearnerLoop a st st2)
+  ))"
+
+fun FakeSend1b :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "FakeSend1b a st st2 = (
+    \<exists>fin :: PreMessage list.
+    let new1b = M1b a fin in
+    WellFormed st new1b \<and>
+    st2 = st\<lparr>msgs := new1b # msgs st\<rparr>
+  )"
+
+fun FakeSend2a :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "FakeSend2a a st st2 = (
+    \<exists>fin :: PreMessage list. \<exists>ln :: Learner.
+    let new2a = M2a ln a fin in
+    WellFormed st new2a \<and>
+    st2 = st\<lparr>msgs := new2a # msgs st\<rparr>
+  )"
+
+fun LearnerRecv :: "Learner \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "LearnerRecv l m st st2 = (
+    Recv_lrn st l m \<and>
+    st2 = st\<lparr> known_msgs_lrn := (
+                \<lambda>x. if l = x 
+                    then m # known_msgs_lrn st x
+                    else known_msgs_lrn st x
+    )\<rparr>
+  )"
+
+fun ChosenIn :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> bool" where
+  "ChosenIn st l b v = (
+      \<exists>S \<subseteq> Known2a st l b v. TrustLive l (acc ` S)
+  )"
+
+fun LearnerDecide :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "LearnerDecide l b v st st2 = (
+    ChosenIn st l b v \<and>
+    st2 = st\<lparr>decision := \<lambda>x y.
+              if x = l \<and> y = b
+              then {v} \<union> decision st x y
+              else decision st x y \<rparr>
+  )"
+
+fun LearnerAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "LearnerAction st st2 = (
+    \<exists>ln :: Learner.
+      (\<exists>m :: PreMessage. LearnerRecv ln m st st2) \<or>
+      (\<exists>bal :: Ballot. \<exists>val :: Value. LearnerDecide ln bal val st st2)
+  )"
+
+fun FakeAcceptorAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "FakeAcceptorAction st st2 = (
+    \<exists>a :: Acceptor. \<not> is_safe a \<and> (
+      FakeSend1b a st st2 \<or>
+      FakeSend2a a st st2
+  ))"
+
+fun Next :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "Next st st2 = (
+       ProposerSendAction st st2
+     \<or> AcceptorProcessAction st st2
+     \<or> AcceptorProcessAction st st2
+     \<or> FakeAcceptorAction st st2
+  )"
+
+consts history :: "nat \<Rightarrow> State"
 
 
-(*
+axiomatization where
+  spec_0: "\<exists>b :: Ballot \<Rightarrow> Value. history 0 = Init b"
 
-*)
+axiomatization where
+  spec_S: "\<forall>n :: nat. Next (history n) (history (n + 1)) \<or> history n = history (n + 1)"
 
-(*
-11. bb
-bb is a natural number since it's compared to Ballot
 
-12. LL
-LL is a Learner
-
-13. QQ
-QQ is the same sort of thing as SafeAcceptor, since it can be a subset of SafeAcceptor.
-*)
 
 
 end
