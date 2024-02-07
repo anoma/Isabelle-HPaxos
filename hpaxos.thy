@@ -662,7 +662,7 @@ fun Next :: "State \<Rightarrow> State \<Rightarrow> bool" where
   "Next st st2 = (
        ProposerSendAction st st2
      \<or> AcceptorProcessAction st st2
-     \<or> AcceptorProcessAction st st2
+     \<or> LearnerAction st st2
      \<or> FakeAcceptorAction st st2
   )"
 
@@ -673,8 +673,153 @@ axiomatization where
   spec_0: "\<exists>b :: Ballot \<Rightarrow> Value. history 0 = Init b"
 
 axiomatization where
-  spec_S: "\<forall>n :: nat. Next (history n) (history (n + 1)) \<or> history n = history (n + 1)"
+  spec_S: "\<forall>n :: nat. history n = history (Suc n) \<or> Next (history n) (history (Suc n))"
 
+fun Safety :: "State \<Rightarrow> bool" where
+  "Safety st = (
+    \<forall>L1 L2 :: Learner. \<forall>B1 B2 :: Ballot. \<forall>V1 V2 :: Value.
+        ent L1 L2
+      \<and> V1 \<in> decision st L1 B1
+      \<and> V2 \<in> decision st L2 B2
+      \<longrightarrow> V1 = V2
+  )"
+
+theorem SafetyResult :
+  shows "\<forall>n. Safety (history n)"
+proof
+  fix n
+  show "Safety (history n)"
+  proof (induction n)
+    case 0
+    then show ?case
+      using spec_0 by fastforce
+  next
+    case (Suc n)
+    fix n
+    assume hyp: "Safety (history n)"
+    have "history n = history (Suc n) \<or> Next (history n) (history (Suc n))"
+      using spec_S by blast
+    then show "Safety (history (Suc n))"
+    unfolding Next.simps
+    proof (elim disjE)
+      assume "history n = history (Suc n)"
+      then show ?thesis 
+        using hyp by force
+    next
+      assume "ProposerSendAction (history n) (history (Suc n))"
+      have "decision (history (Suc n)) = decision (history n)"
+        using \<open>ProposerSendAction (history n) (history (Suc n))\<close> by auto
+      then show ?thesis 
+        using hyp by fastforce
+    next
+      assume "AcceptorProcessAction (history n) (history (Suc n))"
+      then show ?thesis 
+        unfolding AcceptorProcessAction.simps
+        proof (elim exE)
+          fix a
+          assume "is_safe a \<and>
+                    (\<not> two_a_lrn_loop (history n) a \<and>
+                     (queued_msg (history n) a \<noteq> None \<and>
+                      Process1b a (the (queued_msg (history n) a)) (history n) (history (Suc n)) \<or>
+                      queued_msg (history n) a = None \<and>
+                      (\<exists>m. Process1a a m (history n) (history (Suc n)) \<or> Process1b a m (history n) (history (Suc n)))) \<or>
+                     two_a_lrn_loop (history n) a \<and> Process1bLearnerLoop a (history n) (history (Suc n)))"
+          show ?thesis
+          proof (cases "two_a_lrn_loop (history n) a")
+            case True
+            have "Process1bLearnerLoop a (history n) (history (Suc n))" 
+              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop (history n) a \<and> (queued_msg (history n) a \<noteq> None \<and> Process1b a (the (queued_msg (history n) a)) (history n) (history (Suc n)) \<or> queued_msg (history n) a = None \<and> (\<exists>m. Process1a a m (history n) (history (Suc n)) \<or> Process1b a m (history n) (history (Suc n)))) \<or> two_a_lrn_loop (history n) a \<and> Process1bLearnerLoop a (history n) (history (Suc n)))\<close> by blast
+            then show ?thesis
+            unfolding Process1bLearnerLoop.simps
+            proof (elim disjE)
+              assume "\<exists>ln. ln \<notin> processed_lrns (history n) a \<and>
+                        Process1bLearnerLoopStep a ln (history n) (history (Suc n))"
+              then show ?thesis
+                by (metis Process1bLearnerLoopStep.simps Safety.simps hyp)
+            next
+              assume "Process1bLearnerLoopDone a (history n) (history (Suc n))"
+              then show ?thesis
+                using hyp by force
+            qed
+          next
+            case False
+            have "(queued_msg (history n) a \<noteq> None \<and>
+                      Process1b a (the (queued_msg (history n) a)) (history n) (history (Suc n)) \<or>
+                      queued_msg (history n) a = None \<and>
+                      (\<exists>m. Process1a a m (history n) (history (Suc n)) \<or> Process1b a m (history n) (history (Suc n))))"
+              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop (history n) a \<and> (queued_msg (history n) a \<noteq> None \<and> Process1b a (the (queued_msg (history n) a)) (history n) (history (Suc n)) \<or> queued_msg (history n) a = None \<and> (\<exists>m. Process1a a m (history n) (history (Suc n)) \<or> Process1b a m (history n) (history (Suc n)))) \<or> two_a_lrn_loop (history n) a \<and> Process1bLearnerLoop a (history n) (history (Suc n)))\<close> by presburger
+            then show ?thesis
+              proof (elim disjE)
+                assume "queued_msg (history n) a \<noteq> None \<and>
+                        Process1b a (the (queued_msg (history n) a))
+                         (history n) (history (Suc n))"
+                then show ?thesis
+                  using hyp by auto
+              next
+                assume "queued_msg (history n) a = None \<and>
+                      (\<exists>m. Process1a a m (history n) (history (Suc n)) \<or>
+                           Process1b a m (history n)
+                            (history (Suc n)))"
+                then show ?thesis
+                  by (smt (z3) Process1a.simps Process1b.simps Safety.elims(1) hyp)
+              qed
+          qed
+        qed
+    next
+      assume "LearnerAction (history n) (history (Suc n))"
+      then show ?thesis 
+      unfolding LearnerAction.simps
+      proof (elim exE)
+        fix ln
+        assume "(\<exists>m. LearnerRecv ln m (history n)
+                (history (Suc n))) \<or>
+                (\<exists>bal val.
+                    LearnerDecide ln bal val (history n)
+                     (history (Suc n)))"
+        then show ?thesis
+        proof (elim disjE)
+          assume "\<exists>m. LearnerRecv ln m (history n) (history (Suc n))"
+          have "decision (history (Suc n)) = decision (history n)"
+            using \<open>\<exists>m. LearnerRecv ln m (history n) (history (Suc n))\<close> by fastforce
+          then show ?thesis
+            using hyp by fastforce
+        next
+          assume "\<exists>bal val. LearnerDecide ln bal val (history n) (history (Suc n))"
+          then show ?thesis
+            unfolding LearnerDecide.simps ChosenIn.simps
+            sorry
+        qed
+      qed
+    next
+      assume "FakeAcceptorAction (history n) (history (Suc n))"
+      then show ?thesis 
+        unfolding FakeAcceptorAction.simps
+        proof (elim exE)
+          fix a
+          assume "\<not> is_safe a \<and> (FakeSend1b a (history n) (history (Suc n)) \<or>
+                  FakeSend2a a (history n)
+                   (history (Suc n)))"
+          have "FakeSend1b a (history n) (history (Suc n)) \<or>
+                FakeSend2a a (history n) (history (Suc n))"
+            using \<open>\<not> is_safe a \<and> (FakeSend1b a (history n) (history (Suc n)) \<or> FakeSend2a a (history n) (history (Suc n)))\<close> by blast
+          then show ?thesis
+          proof (elim disjE)
+            assume "FakeSend1b a (history n) (history (Suc n))"
+            have "decision (history (Suc n)) = decision (history n)"
+              by (metis FakeSend1b.elims(2) \<open>FakeSend1b a (history n) (history (Suc n))\<close> select_convs(9) simps(12) surjective)
+            then show ?thesis
+              using hyp by fastforce
+          next
+            assume "FakeSend2a a (history n) (history (Suc n))"
+            have "decision (history (Suc n)) = decision (history n)"
+              by (metis FakeSend2a.simps \<open>FakeSend2a a (history n) (history (Suc n))\<close> select_convs(9) simps(12) surjective)
+            then show ?thesis
+              using hyp by fastforce
+          qed
+        qed
+    qed
+  qed
+qed
 
 
 
