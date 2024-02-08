@@ -38,32 +38,32 @@ consts TrustLive :: "Learner \<Rightarrow> Acceptor set \<Rightarrow> bool"
 consts TrustSafe :: "Learner \<Rightarrow> Learner \<Rightarrow> Acceptor set \<Rightarrow> bool"
 
 axiomatization where
-  TrustLiveAssumption: "\<forall>l q. TrustLive l q \<Longrightarrow> is_quorum q"
+  TrustLiveAssumption: "\<forall>l q. (TrustLive l q \<longrightarrow> is_quorum q)"
 
 axiomatization where
-  TrustSafeAssumption: "\<forall>l1 l2 q. TrustSafe l1 l2 q \<Longrightarrow> is_quorum q"
+  TrustSafeAssumption: "\<forall>l1 l2 q. (TrustSafe l1 l2 q \<longrightarrow> is_quorum q)"
 
 axiomatization where
   LearnerGraphAssumptionSymmetry: 
-    "\<forall>l1 l2 q. TrustSafe l1 l2 q \<Longrightarrow> TrustSafe l2 l1 q"
+    "\<forall>l1 l2 q. (TrustSafe l1 l2 q \<longrightarrow> TrustSafe l2 l1 q)"
 
 axiomatization where
   LearnerGraphAssumptionTransitivity:
-    "\<forall>l1 l2 l3 q. TrustSafe l1 l2 q \<and> TrustSafe l2 l3 q \<Longrightarrow> TrustSafe l1 l2 q"
+    "\<forall>l1 l2 l3 q. (TrustSafe l1 l2 q \<and> TrustSafe l2 l3 q \<longrightarrow> TrustSafe l1 l2 q)"
 
 axiomatization where
   LearnerGraphAssumptionClosure:
-    "\<forall>l1 l2 q Q. TrustSafe l1 l2 q \<and> is_quorum Q \<and> q \<subseteq> Q \<Longrightarrow> TrustSafe l1 l2 q2"
+    "\<forall>l1 l2 q Q. (TrustSafe l1 l2 q \<and> is_quorum Q \<and> q \<subseteq> Q \<longrightarrow> TrustSafe l1 l2 q2)"
 
 axiomatization where
   LearnerGraphAssumptionValidity:
-    "\<forall>l1 l2 q Q1 Q2. 
+    "\<forall>l1 l2 q Q1 Q2. (
       TrustSafe l1 l2 q \<and> is_quorum Q1 \<and> is_quorum Q2 \<and>
-      TrustLive l1 Q1 \<and> TrustLive l2 Q2 \<Longrightarrow>
-      \<exists> N:: Acceptor. q N \<and> Q1 N \<and> Q2 N"
+      TrustLive l1 Q1 \<and> TrustLive l2 Q2 \<longrightarrow> (
+      \<exists> N:: Acceptor. N \<in> q \<and> N \<in> Q1 \<and> N \<in> Q2))"
 
 (* Entanglement relation *)
-definition ent :: "Learner \<Rightarrow> Learner \<Rightarrow> bool" where
+fun ent :: "Learner \<Rightarrow> Learner \<Rightarrow> bool" where
   "ent l1 l2 = TrustSafe l1 l2 {x . is_safe x}"
 
 (* Messages *)
@@ -666,14 +666,16 @@ fun Next :: "State \<Rightarrow> State \<Rightarrow> bool" where
      \<or> FakeAcceptorAction st st2
   )"
 
+fun Spec :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Spec f = (
+    (\<exists>b :: Ballot \<Rightarrow> Value. f 0 = Init b) \<and>
+    (\<forall>n :: nat. f n = f (Suc n) \<or> Next (f n) (f (Suc n)))
+  )"
+
 consts history :: "nat \<Rightarrow> State"
 
-
 axiomatization where
-  spec_0: "\<exists>b :: Ballot \<Rightarrow> Value. history 0 = Init b"
-
-axiomatization where
-  spec_S: "\<forall>n :: nat. history n = history (Suc n) \<or> Next (history n) (history (Suc n))"
+  hist_spec: "Spec history"
 
 fun Safety :: "State \<Rightarrow> bool" where
   "Safety st = (
@@ -692,13 +694,13 @@ proof
   proof (induction n)
     case 0
     then show ?case
-      using spec_0 by fastforce
+      using hist_spec by fastforce
   next
     case (Suc n)
     fix n
     assume hyp: "Safety (history n)"
     have "history n = history (Suc n) \<or> Next (history n) (history (Suc n))"
-      using spec_S by blast
+      using Spec.simps hist_spec by blast
     then show "Safety (history (Suc n))"
     unfolding Next.simps
     proof (elim disjE)
@@ -786,8 +788,43 @@ proof
         next
           assume "\<exists>bal val. LearnerDecide ln bal val (history n) (history (Suc n))"
           then show ?thesis
-            unfolding LearnerDecide.simps ChosenIn.simps
-            sorry
+            unfolding LearnerDecide.simps Safety.simps ChosenIn.simps
+            proof (elim exE; elim exE; clarify)
+              fix bal val S L1 L2 B1 B2 V1 V2
+              assume "S \<subseteq> Known2a (history n) ln bal val"
+                     "TrustLive ln (acc ` S)"
+                     "history (Suc n) = history n
+                       \<lparr>decision :=
+                          \<lambda>x y. if x = ln \<and> y = bal
+                                 then {val} \<union> decision (history n) x y
+                                 else decision (history n) x y\<rparr>"
+                     "ent L1 L2"
+                     "V1 \<in> decision (history (Suc n)) L1 B1"
+                     "V2 \<in> decision (history (Suc n)) L2 B2"
+              then show "V1 = V2"
+                unfolding Known2a.simps ent.simps B.simps Get1a.simps
+              proof (cases "(L1 = ln \<and> B1 = bal) \<or> (L2 = ln \<and> B2 = bal)")
+                case False
+                then show ?thesis
+                  using \<open>V1 \<in> decision (history (Suc n)) L1 B1\<close> \<open>V2 \<in> decision (history (Suc n)) L2 B2\<close> \<open>ent L1 L2\<close> \<open>history (Suc n) = history n \<lparr>decision := \<lambda>x y. if x = ln \<and> y = bal then {val} \<union> decision (history n) x y else decision (history n) x y\<rparr>\<close> hyp by auto
+              next
+                case True
+                then show ?thesis
+                proof (elim disjE)
+                  assume "L1 = ln \<and> B1 = bal"
+                  have "is_quorum (acc ` S)" using TrustLiveAssumption \<open>TrustLive ln (acc ` S)\<close> by blast
+                  have "V1 \<in> {val} \<union> decision (history n) ln bal" using \<open>L1 = ln \<and> B1 = bal\<close> \<open>V1 \<in> decision (history (Suc n)) L1 B1\<close> \<open>history (Suc n) = history n \<lparr>decision := \<lambda>x y. if x = ln \<and> y = bal then {val} \<union> decision (history n) x y else decision (history n) x y\<rparr>\<close> by auto
+                  have "TrustSafe ln L2 (Collect is_safe)" using \<open>L1 = ln \<and> B1 = bal\<close> \<open>ent L1 L2\<close> ent.simps by blast
+                  
+                  then show ?thesis
+                    sorry
+                next
+                  assume "L2 = ln \<and> B2 = bal"
+                  then show ?thesis
+                    sorry
+                qed
+              qed
+            qed
         qed
       qed
     next
