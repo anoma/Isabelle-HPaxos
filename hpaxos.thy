@@ -686,6 +686,151 @@ fun Safety :: "State \<Rightarrow> bool" where
       \<longrightarrow> V1 = V2
   )"
 
+(*Mostly enforced by types*)
+fun TypeOK :: "State \<Rightarrow> bool" where
+  "TypeOK st = (
+    \<forall>m \<in> set (msgs st). isValidMessage m
+  )"
+(*
+    msgs st \<in> SUBSET Message
+    \<and> known_msgs \<in> [Acceptor \<union> Learner -> SUBSET Message]
+    \<and> recent_msgs \<in> [Acceptor \<union> Learner -> SUBSET Message]
+    \<and> queued_msg \<in> [Acceptor -> Message \<union> {NoMessage}]
+    \<and> 2a_lrn_loop \<in> [Acceptor -> BOOLEAN]
+    \<and> processed_lrns \<in> [Acceptor -> SUBSET Learner]
+    \<and> decision \<in> [Learner \<times> Ballot -> SUBSET Value]
+    \<and> BVal \<in> [Ballot -> Value]
+*)
+
+fun RecentMsgs_accSpec :: "State \<Rightarrow> bool" where
+  "RecentMsgs_accSpec st = (
+    \<forall>a :: Acceptor. is_safe a \<longrightarrow> 
+      set (recent_msgs_acc st a) \<subseteq> set (known_msgs_acc st a)
+  )"
+
+fun RecentMsgs_lrnSpec :: "State \<Rightarrow> bool" where
+  "RecentMsgs_lrnSpec st = (
+    \<forall>l :: Learner.
+      set (recent_msgs_lrn st l) \<subseteq> set (known_msgs_lrn st l)
+  )"
+
+fun KnownMsgs_accSpec :: "State \<Rightarrow> bool" where
+  "KnownMsgs_accSpec st = (
+     \<forall>a :: Acceptor. is_safe a \<longrightarrow> 
+      (\<forall>m \<in> set (known_msgs_acc st a). 
+        m \<in> set (msgs st) \<and>
+        Proper_acc st a m \<and>
+        WellFormed st m \<and>
+        Tran m \<subseteq> set (known_msgs_acc st a) \<and>
+        (\<exists>b :: Ballot. B m b)
+  ))"
+
+fun KnownMsgs_lrnSpec :: "State \<Rightarrow> bool" where
+  "KnownMsgs_lrnSpec st = (
+     \<forall>l :: Learner. 
+      (\<forall>m \<in> set (known_msgs_lrn st l). 
+        m \<in> set (msgs st) \<and>
+        Proper_lrn st l m \<and>
+        WellFormed st m \<and>
+        Tran m \<subseteq> set (known_msgs_lrn st l) \<and>
+        (\<exists>b :: Ballot. B m b)
+  ))"
+
+fun QueuedMsgSpec1 :: "State \<Rightarrow> bool" where
+  "QueuedMsgSpec1 st = (
+    \<forall>a :: Acceptor. is_safe a \<and> queued_msg st a \<noteq> None \<longrightarrow> (
+      type (the (queued_msg st a)) = T1b \<and>
+      isValidMessage (the (queued_msg st a)) \<and>
+      (recent_msgs_acc st a = [])
+  ))"
+
+fun twoaLearnerLoopSpec :: "State \<Rightarrow> bool" where "
+  twoaLearnerLoopSpec st = (
+    \<forall>a :: Acceptor. is_safe a \<and> two_a_lrn_loop st a \<longrightarrow>
+      queued_msg st a = None
+  )"
+
+fun SentBy :: "State \<Rightarrow> Acceptor \<Rightarrow> PreMessage set" where
+  "SentBy st a = {m \<in> set (msgs st) . type m \<noteq> T1a \<and> acc m = a}"
+
+fun SafeAcceptorOwnMessagesRefsSpec :: "State \<Rightarrow> bool" where "
+  SafeAcceptorOwnMessagesRefsSpec st = (
+    \<forall>a :: Acceptor. is_safe a \<and> (SentBy st a \<noteq> {}) \<longrightarrow>
+        (queued_msg st a = None \<longrightarrow> (
+          \<exists> m0 \<in> set (recent_msgs_acc st a). \<forall>m1 \<in> SentBy st a. m1 \<in> Tran m0)) \<and>
+        (queued_msg st a \<noteq> None \<longrightarrow> (
+          \<forall>m1 \<in> SentBy st a. m1 \<in> Tran (the (queued_msg st a))))
+  )"
+
+fun MsgsSafeAcceptorSpec :: "State \<Rightarrow> bool" where "
+  MsgsSafeAcceptorSpec st = (
+    \<forall>a :: Acceptor. is_safe a \<longrightarrow> (
+    \<forall> m1 \<in> set(msgs st). \<forall> m2 \<in> set(msgs st).
+    (type m1 \<noteq> T1a \<and> type m2 \<noteq> T1a \<and> acc m1 = a \<and> acc m2 = a) \<longrightarrow>
+    (m1 \<in> Tran m1 \<or> m2 \<in> Tran m2)
+  ))"
+
+fun DecisionSpec :: "State \<Rightarrow> bool" where "
+  DecisionSpec st = (
+    \<forall>l :: Learner. \<forall>b :: Ballot. \<forall>v :: Value.
+      v \<in> decision st l b \<longrightarrow> ChosenIn st l b v
+  )"
+
+(*
+DecisionSpec ==
+    \A L \in Learner : \A BB \in Ballot : \A VV \in Value :
+        VV \in decision[L, BB] => ChosenIn(L, BB, VV)
+*)
+
+
+fun FullSafetyInvariant :: "State \<Rightarrow> bool" where
+  "FullSafetyInvariant st = (
+    TypeOK st
+    \<and> RecentMsgs_accSpec st
+    \<and> RecentMsgs_lrnSpec st
+    \<and> KnownMsgs_accSpec st
+    \<and> KnownMsgs_lrnSpec st
+    \<and> QueuedMsgSpec1 st
+    \<and> twoaLearnerLoopSpec st
+    \<and> SafeAcceptorOwnMessagesRefsSpec st
+    \<and> MsgsSafeAcceptorSpec st
+    \<and> DecisionSpec st
+    \<and> Safety st
+  )"
+
+lemma FullSafetyInvariantNext :
+  assumes "FullSafetyInvariant st"
+  assumes "Next st st2"
+  shows "FullSafetyInvariant st2"
+sorry
+
+theorem PreSafetyResult :
+  assumes "Spec f"
+  shows "\<forall>n. FullSafetyInvariant (f n)"
+proof
+  fix n
+  show "FullSafetyInvariant (f n)"
+  proof (induction n)
+    case 0
+    have "\<forall>b. FullSafetyInvariant (Init b)"
+      by (simp add: NoMessage_def)
+    then show ?case
+      by (metis Spec.simps assms)
+  next
+    case (Suc n)
+    fix n
+    assume hyp: "FullSafetyInvariant (f n)"
+    then show "FullSafetyInvariant (f (Suc n))"
+      by (metis FullSafetyInvariantNext Spec.elims(2) assms)
+  qed
+qed
+
+theorem SafetyResult :
+  assumes "Spec f"
+  shows "\<forall>n. Safety (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+(*
 theorem SafetyResult :
   shows "\<forall>n. Safety (history n)"
 proof
@@ -857,7 +1002,7 @@ proof
     qed
   qed
 qed
-
+*)
 
 
 end
