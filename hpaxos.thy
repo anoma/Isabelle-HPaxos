@@ -624,7 +624,7 @@ fun AcceptorProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" wher
        ((queued_msg st a \<noteq> None \<and> 
          Process1b a (the (queued_msg st a)) st st2) \<or> 
         (queued_msg st a = None \<and> (
-          \<exists>m :: PreMessage. Process1a a m st st2 \<or> Process1b a m st st2
+          \<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2
         ))))
       \<or> (two_a_lrn_loop st a \<and> 
          Process1bLearnerLoop a st st2)
@@ -881,18 +881,18 @@ proof -
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have p: "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             unfolding Process1bLearnerLoop.simps
             proof (elim disjE)
@@ -978,7 +978,7 @@ proof -
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume qp:"(queued_msg st a \<noteq> None) \<and>
@@ -1023,7 +1023,7 @@ proof -
                 then show ?thesis
                 proof
                   have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                    using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+                    using False h by blast
                   then show ?thesis
                   proof (elim exE)
                     fix m
@@ -1239,18 +1239,18 @@ proof
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h:"is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             unfolding Process1bLearnerLoop.simps
             proof (elim disjE)
@@ -1269,7 +1269,7 @@ proof
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
@@ -1284,7 +1284,7 @@ proof
                 then show ?thesis
                 proof
                   have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                    using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+                    using False h by blast
                   then show ?thesis
                   proof (elim exE)
                     fix m
@@ -1353,18 +1353,18 @@ proof
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             by (smt (verit, del_insts) Process1bLearnerLoop.simps Process1bLearnerLoopDone.elims(1) Process1bLearnerLoopStep.elims(2) RecentMsgs_lrnSpec.elims(1) Store_acc.elims(2) assms(1) ext_inject surjective update_convs(7))
           next
@@ -1373,7 +1373,7 @@ proof
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
@@ -1388,7 +1388,7 @@ proof
                 then show ?thesis
                 proof
                   have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                    using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+                    using False h by blast
                   then show ?thesis
                   proof (elim exE)
                     fix m
@@ -1465,18 +1465,18 @@ proof
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             unfolding Process1bLearnerLoop.simps
             proof (elim disjE)
@@ -1495,7 +1495,7 @@ proof
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
@@ -1510,7 +1510,7 @@ proof
                 then show ?thesis
                 proof
                   have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                    using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+                    using False h by blast
                   then show ?thesis
                   proof (elim exE)
                     fix m
@@ -1582,18 +1582,18 @@ proof
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
           case True
           have "Process1bLearnerLoop a st st2" 
-            using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+            using True h by blast
           then show ?thesis
             by (smt (verit, best) Process1bLearnerLoop.simps Process1bLearnerLoopDone.elims(1) Process1bLearnerLoopStep.elims(2) \<open>is_safe a2 \<and> two_a_lrn_loop st2 a2\<close> assms(1) ext_inject surjective twoaLearnerLoopSpec.elims(1) update_convs(7))
         next
@@ -1602,7 +1602,7 @@ proof
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
                     (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-            using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+            using False h by blast
           then show ?thesis
             by (smt (z3) False Process1a.elims(2) Process1b.simps \<open>is_safe a2 \<and> two_a_lrn_loop st2 a2\<close> assms(1) twoaLearnerLoopSpec.elims(1))
           qed
@@ -1653,18 +1653,18 @@ proof (clarify)
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
               by (smt (verit, best) ChosenIn.elims(1) Collect_cong Known2a.simps Process1bLearnerLoop.simps Process1bLearnerLoopDone.elims(1) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) V.simps \<open>v \<in> decision st l b \<Longrightarrow> ChosenIn st l b v\<close> \<open>v \<in> decision st2 l b\<close> ext_inject surjective update_convs(7))
           next
@@ -1673,7 +1673,7 @@ proof (clarify)
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
@@ -1701,6 +1701,53 @@ proof (clarify)
   qed
 qed
 
+lemma next_split:
+  assumes "Next st st2"
+  shows "ProposerSendAction st st2 \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2) \<or>
+          LearnerAction st st2 \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend1b A st st2) \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend2a A st st2)"
+proof -
+  have "Next st st2"
+    using assms(1) by blast
+  then show ?thesis
+    unfolding Next.simps
+  proof (elim disjE)
+    assume "ProposerSendAction st st2"
+    then show ?thesis
+      by blast
+  next
+    assume "AcceptorProcessAction st st2"
+    then show ?thesis
+      by (metis AcceptorProcessAction.elims(2) Process1bLearnerLoop.simps)
+  next
+    assume "LearnerAction st st2"
+    then show ?thesis
+      by blast
+  next
+    assume "FakeAcceptorAction st st2"
+    then show ?thesis
+      by (meson FakeAcceptorAction.elims(2))
+  qed
+qed
+
 lemma SafeAcceptorOwnMessagesRefsSpecInvariant :
   assumes "twoaLearnerLoopSpec st"
   assumes "SafeAcceptorOwnMessagesRefsSpec st"
@@ -1722,38 +1769,53 @@ proof (clarify)
   proof (elim exE)
     fix mm
     assume "mm \<in> SentBy st2 A"
-    show ?thesis
-  proof (cases "ProposerSendAction st st2")
-    case True
-    assume "ProposerSendAction st st2"
-    then show ?thesis
-      unfolding ProposerSendAction.simps
-    proof (elim exE)
-      fix bal
-      assume "Send1a bal st st2"
-      show ?thesis
-      proof (cases "queued_msg st2 A = None")
-        case True
-        have h: "\<exists>m0\<in>set (recent_msgs_acc st2 A). \<forall>m1\<in>SentBy st2 A. m1 \<in> Tran m0"
-          using True \<open>Send1a bal st st2\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) surjective by fastforce
-        show ?thesis
-          using True h by blast 
-      next
-        case False
-        have h: "\<forall>m1\<in>SentBy st2 A. m1 \<in> Tran (the (queued_msg st2 A))"
-          using False \<open>Send1a bal st st2\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) surjective by fastforce
-        show ?thesis
-          using False h by blast
-      qed
-    qed
-  next
-    case False
-    assume f0: "\<not> ProposerSendAction st st2"
-    show ?thesis
-    proof (cases "\<exists>A :: Acceptor. is_safe A
+    have css: "ProposerSendAction st st2 \<or>
+          (\<exists>A :: Acceptor. is_safe A
                       \<and> queued_msg st A = None 
-                      \<and> (\<exists>m :: PreMessage. Process1a A m st st2)")
-      case True
+                      \<and> (\<exists>m :: PreMessage. Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2) \<or>
+          LearnerAction st st2 \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend1b A st st2) \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend2a A st st2)
+          "
+      by (smt (verit, del_insts) assms(3) next_split)
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+      unfolding ProposerSendAction.simps
+      proof (elim exE)
+        fix bal
+        assume "Send1a bal st st2"
+        show ?thesis
+        proof (cases "queued_msg st2 A = None")
+          case True
+          have h: "\<exists>m0\<in>set (recent_msgs_acc st2 A). \<forall>m1\<in>SentBy st2 A. m1 \<in> Tran m0"
+            using True \<open>Send1a bal st st2\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) surjective by fastforce
+          show ?thesis
+            using True h by blast 
+        next
+          case False
+          have h: "\<forall>m1\<in>SentBy st2 A. m1 \<in> Tran (the (queued_msg st2 A))"
+            using False \<open>Send1a bal st st2\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) surjective by fastforce
+          show ?thesis
+            using False h by blast
+        qed
+      qed
+    next
       assume "\<exists>A :: Acceptor. is_safe A
                   \<and> queued_msg st A = None 
                   \<and> (\<exists>m :: PreMessage. Process1a A m st st2)"
@@ -1803,35 +1865,23 @@ proof (clarify)
           qed
       qed
     next
-      case False
-      assume f1: "\<nexists>A. is_safe A \<and>
-                queued_msg st A = None \<and>
-                (\<exists>m. Process1a A m st st2)"
-      show ?thesis
-      proof (cases "\<exists>A :: Acceptor. is_safe A
+      assume "\<exists>A :: Acceptor. is_safe A
                         \<and> queued_msg st A \<noteq> None 
-                        \<and> Process1b A (the (queued_msg st A)) st st2")
-        case True
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+      proof (elim exE)
+        fix acc
+        assume "is_safe acc \<and>
+                queued_msg st acc \<noteq> None \<and>
+                Process1b acc (the (queued_msg st acc)) st st2"
         then show ?thesis
-        proof (elim exE)
-          fix acc
-          assume "is_safe acc \<and>
-                  queued_msg st acc \<noteq> None \<and>
-                  Process1b acc (the (queued_msg st acc)) st st2"
-          then show ?thesis
-            by (smt (verit) Collect_cong Process1b.simps SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) list.set_intros(1))
-        qed
-      next
-        case False
-        assume f2: "\<nexists>A. is_safe A \<and>
-                  queued_msg st A \<noteq> None \<and>
-                  Process1b A (the (queued_msg st A)) st st2"
-        show ?thesis
-          proof (cases "\<exists>A :: Acceptor. is_safe A
-                        \<and> queued_msg st A = None 
-                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)")
-        case True
-        then show ?thesis
+          by (smt (verit) Collect_cong Process1b.simps SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) list.set_intros(1))
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
         proof (elim exE)
           fix acc
           assume "is_safe acc \<and>
@@ -1840,434 +1890,117 @@ proof (clarify)
           show ?thesis
             by (smt (verit, ccfv_threshold) Process1b.simps SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>is_safe A\<close> \<open>is_safe acc \<and> queued_msg st acc = None \<and> (\<exists>m\<in>set (msgs st). Process1b acc m st st2)\<close> \<open>mm \<in> SentBy st2 A\<close> assms(2) empty_iff insert_iff list.simps(15) mem_Collect_eq)
         qed
-      next
-        case False
-        assume f3: "\<nexists>A. is_safe A \<and>
-                  queued_msg st A = None \<and>
-                  (\<exists>m\<in>set (msgs st). Process1b A m st st2)"
-        show ?thesis
-          proof (cases "\<exists>A :: Acceptor. is_safe A
-                        \<and> two_a_lrn_loop st A 
-                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)")
-              case True
-              then show ?thesis
-              proof (elim exE)
-                fix acc
-                assume h3: "is_safe acc \<and>
-                        two_a_lrn_loop st acc \<and>
-                        (\<exists>l. Process1bLearnerLoopStep acc l st st2)"
-                have "\<exists>l. Process1bLearnerLoopStep acc l st st2" using h3 by blast
-                then show ?thesis
-                proof (elim exE)
-                  fix lrnn
-                  assume "Process1bLearnerLoopStep acc lrnn st st2"
-                  have "queued_msg st acc = None"
-                    by (meson assms(1) h3 twoaLearnerLoopSpec.elims(2))
-                  define new2a where "new2a = M2a lrnn acc (recent_msgs_acc st acc)"
-                  have "\<forall>m \<in> set (recent_msgs_acc st acc). isValidMessage m"
-                    by (meson TypeOK.elims(2) assms(4))
-                  have "isValidMessage new2a"
-                    sorry
-                  show ?thesis
-                    proof (cases "WellFormed st new2a")
-                      case True
-                      show ?thesis
-                        sorry
-                    next
-                      case False
-                      assume "\<not> WellFormed st new2a"
-                      have "\<not> (isValidMessage new2a) \<or>
-                            \<not> (Ex (B new2a)) \<or>
-                            \<not> (TrustLive (lrn new2a) (q st new2a))"
-                        by (metis False MessageType.simps(6) WellFormed.elims(3) new2a_def type.simps(3))
-                      then show ?thesis
-                        unfolding WellFormed.simps
-                        proof (cases "queued_msg st2 A = None")
-                          case True
-                          have fh: "\<exists>m0\<in>set (recent_msgs_acc st2 A).
-                                    \<forall>m1\<in>SentBy st2 A. m1 \<in> Tran m0"
-                            unfolding SentBy.simps
-                            sorry
-                        show ?thesis
-                          using True fh by blast
-                      next
-                        case False
-                        have fh: "\<forall>m1\<in>SentBy st2 A. m1 \<in> Tran (the (queued_msg st2 A))"
-                          sorry
-                        show ?thesis
-                          using False fh by blast
-                      qed
-                    qed
-
-                qed
-              qed
-            next
-              case False
-              assume f4: "\<nexists>A. is_safe A \<and>
-                        two_a_lrn_loop st A \<and>
-                        (\<exists>l. Process1bLearnerLoopStep A l st st2)"
-              show ?thesis
-                sorry
-            qed
-      qed
-      qed
-    qed
-  qed
-qed qed
-
-(*
-proof (clarify)
-  fix a2
-  assume "is_safe a2"
-         "SentBy st2 a2 \<noteq> {}"
-  have "Next st st2"
-    using assms(3) by blast
-  then show "(queued_msg st2 a2 = None \<longrightarrow>
-             (\<exists>m0\<in>set (recent_msgs_acc st2 a2).
-              \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0)) \<and>
-         (queued_msg st2 a2 \<noteq> None \<longrightarrow>
-          (\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))))"
-    unfolding Next.simps
-  proof (elim disjE)
-    assume "ProposerSendAction st st2"
-    have "SentBy st a2 \<noteq> {}"
-      using \<open>ProposerSendAction st st2\<close> \<open>SentBy st2 a2 \<noteq> {}\<close> by auto
-    have hyp1: "queued_msg st a2 = None \<longrightarrow>
-                 (\<exists>m0\<in>set (recent_msgs_acc st a2).
-                  \<forall>m1\<in>SentBy st a2. m1 \<in> Tran m0)"
-      using SafeAcceptorOwnMessagesRefsSpec.simps \<open>SentBy st a2 \<noteq> {}\<close> \<open>is_safe a2\<close> assms(2) by presburger
-    have hyp2: "(queued_msg st a2 \<noteq> None \<longrightarrow>
-          (\<forall>m1\<in>SentBy st a2. m1 \<in> Tran (the (queued_msg st a2))))"
-      using SafeAcceptorOwnMessagesRefsSpec.simps \<open>SentBy st a2 \<noteq> {}\<close> \<open>is_safe a2\<close> assms(2) by presburger
-    show ?thesis
-    proof (intro conjI; clarify)
-      assume "queued_msg st2 a2 = None"
-      show "\<exists>m0\<in>set (recent_msgs_acc st2 a2).  \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-        using \<open>ProposerSendAction st st2\<close> \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>is_safe a2\<close> \<open>queued_msg st2 a2 = None\<close> assms(2) by fastforce
     next
-      fix m1 y
-      assume "m1 \<in> SentBy st2 a2"
-             "queued_msg st2 a2 = Some y"
-      then show "m1 \<in> Tran (the (queued_msg st2 a2))"
-        using \<open>ProposerSendAction st st2\<close> \<open>is_safe a2\<close> assms(2) mem_Collect_eq option.discI set_ConsD by fastforce
-    qed
-  next
-    assume "AcceptorProcessAction st st2"
-    then show ?thesis
-    unfolding AcceptorProcessAction.simps
-    proof (elim exE)
-      fix a
-      assume "is_safe a \<and>
-                (\<not> two_a_lrn_loop st a \<and>
-                 (queued_msg st a \<noteq> None \<and>
-                  Process1b a (the (queued_msg st a)) st st2 \<or>
-                  queued_msg st a = None \<and>
-                  (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
-                 two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
-      show ?thesis
-      proof (cases "two_a_lrn_loop st a")
-          case True
-          have "Process1bLearnerLoop a st st2" 
-            using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+      proof (elim exE)
+        fix acc
+        assume h3: "is_safe acc \<and>
+                two_a_lrn_loop st acc \<and>
+                (\<exists>l. Process1bLearnerLoopStep acc l st st2)"
+        have "\<exists>l. Process1bLearnerLoopStep acc l st st2" using h3 by blast
+        then show ?thesis
+        proof (elim exE)
+          fix lrnn
+          assume "Process1bLearnerLoopStep acc lrnn st st2"
+          have "queued_msg st acc = None"
+            by (meson assms(1) h3 twoaLearnerLoopSpec.elims(2))
+          define new2a where "new2a = M2a lrnn acc (recent_msgs_acc st acc)"
+          have "list_all isValidMessage (recent_msgs_acc st acc)"
+            by (metis TypeOK.elims(2) assms(4) list_all_iff)
           then show ?thesis
-          unfolding Process1bLearnerLoop.simps
-          proof (elim disjE)
-            assume "\<exists>ln. ln \<notin> processed_lrns st a \<and>
-                      Process1bLearnerLoopStep a ln st st2"          
-            then show ?thesis
-            proof (elim exE)
-              fix ln
-              assume "ln \<notin> processed_lrns st a \<and>
-                      Process1bLearnerLoopStep a ln st st2"
-              then show ?thesis
-                unfolding Process1bLearnerLoopStep.simps
-              proof (intro conjI; clarify)
-                assume "queued_msg st2 a2 = None"
-                have "queued_msg st2 = queued_msg st"
-                  by (meson Process1bLearnerLoopStep.elims(2) \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close>)
-                show "\<exists>m0\<in>set (recent_msgs_acc st2 a2).  \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                proof (cases "WellFormed st (M2a ln a (recent_msgs_acc st a))")
+            proof (cases "WellFormed st new2a")
+              case True
+              assume "WellFormed st new2a"
+              have "recent_msgs_acc st2 =
+                    (\<lambda>x. if x = acc then [new2a] else recent_msgs_acc st x)"
+                by (metis Process1bLearnerLoopStep.simps True \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> new2a_def)
+              show ?thesis
+              proof (cases "acc = A")
                 case True
-                have "msgs st2 = (M2a ln a (recent_msgs_acc st a)) # msgs st"
-                  by (meson Process1bLearnerLoopStep.elims(2) Send.elims(2) True \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close>)
-                have "recent_msgs_acc st2 =
-                        (\<lambda>x. if x = a then [M2a ln a (recent_msgs_acc st a)]
-                              else recent_msgs_acc st x)"
-                  by (metis Process1bLearnerLoopStep.elims(2) True \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close>)
+                assume "acc = A"
+                have "new2a \<in> Tran(new2a)"
+                  using Tran.simps(3) new2a_def by blast
+                have "new2a \<in> set (recent_msgs_acc st2 A)"
+                  by (simp add: True \<open>recent_msgs_acc st2 = (\<lambda>x. if x = acc then [new2a] else recent_msgs_acc st x)\<close>)
                 show ?thesis
-                proof (cases "SentBy st a2 = {}")
+                proof (cases "SentBy st A \<noteq> {}")
                   case True
+                  have "\<exists>m0 \<in> set (recent_msgs_acc st A).
+                          \<forall>m \<in> SentBy st A. m \<in> Tran m0"
+                    by (metis SafeAcceptorOwnMessagesRefsSpec.elims(2) True \<open>acc = A\<close> \<open>is_safe A\<close> \<open>queued_msg st acc = None\<close> assms(2))
                   show ?thesis
-                    using True \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>msgs st2 = M2a ln a (recent_msgs_acc st a) # msgs st\<close> \<open>recent_msgs_acc st2 = (\<lambda>x. if x = a then [M2a ln a (recent_msgs_acc st a)] else recent_msgs_acc st x)\<close> by fastforce
+                    by (smt (verit, ccfv_threshold) Process1bLearnerLoopStep.elims(2) Send.elims(2) SentBy.elims Tran.simps(3) UN_I UnCI \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> \<open>\<exists>m0\<in>set (recent_msgs_acc st A). \<forall>m\<in>SentBy st A. m \<in> Tran m0\<close> \<open>acc = A\<close> \<open>queued_msg st acc = None\<close> insert_iff list.simps(15) mem_Collect_eq)
                 next
                   case False
-                  have hyp: "(\<exists>m0\<in>set (recent_msgs_acc st a2). \<forall>m1\<in>SentBy st a2. m1 \<in> Tran m0)"
-                    using False \<open>is_safe a2\<close> \<open>queued_msg st2 = queued_msg st\<close> \<open>queued_msg st2 a2 = None\<close> assms(2) by auto
                   show ?thesis
-                    sorry
-                qed
-                next
-                case False
-                have "msgs st2 = msgs st"
-                  by (meson False Process1bLearnerLoopStep.elims(2) \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close>)
-                have "recent_msgs_acc st2 = recent_msgs_acc st"
-                  by (meson False Process1bLearnerLoopStep.elims(2) \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close>)
-                show ?thesis
-                  using \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>is_safe a2\<close> \<open>msgs st2 = msgs st\<close> \<open>queued_msg st2 = queued_msg st\<close> \<open>queued_msg st2 a2 = None\<close> \<open>recent_msgs_acc st2 = recent_msgs_acc st\<close> assms(2) by force
+                    by (metis (no_types, lifting) False Process1bLearnerLoopStep.elims(2) Send.elims(2) SentBy.elims Tran.simps(3) True UnCI \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> \<open>new2a \<in> set (recent_msgs_acc st2 A)\<close> \<open>queued_msg st acc = None\<close> insertCI mem_Collect_eq new2a_def set_ConsD)
                 qed
               next
-                fix m1 y
-                assume "m1 \<in> SentBy st2 a2"
-                       "queued_msg st2 a2 = Some y"
-                show "m1 \<in> Tran (the (queued_msg st2 a2))"
-                  by (smt (verit) Process1bLearnerLoopStep.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) Send.elims(2) SentBy.elims True \<open>is_safe a2\<close> \<open>ln \<notin> processed_lrns st a \<and> Process1bLearnerLoopStep a ln st st2\<close> \<open>m1 \<in> SentBy st2 a2\<close> \<open>queued_msg st2 a2 = Some y\<close> assms(1) assms(2) empty_iff hpaxos.acc.simps(3) mem_Collect_eq option.discI set_ConsD twoaLearnerLoopSpec.elims(2))
+                case False
+                have "recent_msgs_acc st2 A = recent_msgs_acc st A"
+                  using False \<open>recent_msgs_acc st2 = (\<lambda>x. if x = acc then [new2a] else recent_msgs_acc st x)\<close> by presburger
+                have "queued_msg st2 A = queued_msg st A"
+                  by (metis Process1bLearnerLoopStep.elims(2) \<open>Process1bLearnerLoopStep acc lrnn st st2\<close>)
+                have "SentBy st2 A = SentBy st A"
+                  by (smt (verit, ccfv_SIG) Collect_cong False Process1bLearnerLoopStep.elims(2) Send.elims(2) SentBy.elims \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> hpaxos.acc.simps(3) insert_iff list.simps(15))
+                have "Process1bLearnerLoopStep acc lrnn st st2"
+                  using \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> by blast
+                show ?thesis
+                  by (metis SafeAcceptorOwnMessagesRefsSpec.elims(2) \<open>SentBy st2 A = SentBy st A\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> \<open>queued_msg st2 A = queued_msg st A\<close> \<open>recent_msgs_acc st2 A = recent_msgs_acc st A\<close> assms(2))
               qed
-           qed
-          next
-            assume "Process1bLearnerLoopDone a st st2"
-            show ?thesis
-            proof (cases "queued_msg st2 a2 = None")
-              case True
-              assume "queued_msg st2 a2 = None"
-              have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                using True \<open>Process1bLearnerLoopDone a st st2\<close> \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>is_safe a2\<close> assms(2) by auto
-              show ?thesis
-                using True h by blast
             next
               case False
-              assume "queued_msg st2 a2 \<noteq> None"
-              have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                using False \<open>Process1bLearnerLoopDone a st st2\<close> \<open>is_safe a2\<close> assms(2) by auto
+              have es: "msgs st2 = msgs st \<and>
+                         recent_msgs_acc st2 = recent_msgs_acc st \<and>
+                         queued_msg st2 = queued_msg st"
+                by (metis False Process1bLearnerLoopStep.elims(2) \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> new2a_def)
               show ?thesis
-                using False h by blast
-            qed
-          qed
-        next
-                case False
-                have "(queued_msg st a \<noteq> None \<and>
-                          Process1b a (the (queued_msg st a)) st st2 \<or>
-                          queued_msg st a = None \<and>
-                          (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-                  using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
-                then show ?thesis
-                  proof (elim disjE)
-                    assume "queued_msg st a \<noteq> None \<and>
-                            Process1b a (the (queued_msg st a))
-                             st st2"
-                    then show ?thesis
-                    proof (cases "queued_msg st2 a2 = None")
-                      case True
-                      assume "queued_msg st2 a2 = None"
-                      have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                        sorry
-                      show ?thesis
-                        using True h by blast
-                    next
-                      case False
-                      assume "queued_msg st2 a2 \<noteq> None"
-                      have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                        by (metis (mono_tags) False Process1b.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.simps \<open>is_safe a2\<close> \<open>queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2\<close> assms(2) empty_iff)
-                      show ?thesis
-                        using False h by blast
-                    qed
-                  next
-                    assume "queued_msg st a = None \<and>
-                            (\<exists>m. Process1a a m st st2 \<or>
-                                 Process1b a m st st2)"
-                    then show ?thesis
-                    proof
-                      have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                        using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
-                      then show ?thesis
-                      proof (elim exE)
-                        fix m
-                        assume "Process1a a m st st2 \<or> Process1b a m st st2"
-                        then show ?thesis
-                        proof (elim disjE)
-                          assume "Process1a a m st st2"
-                          then show ?thesis
-                          proof (cases "queued_msg st2 a2 = None")
-                            case True
-                            assume "queued_msg st2 a2 = None"
-                            have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                              sorry
-                            show ?thesis
-                              using True h by blast
-                          next
-                            case False
-                            assume "queued_msg st2 a2 \<noteq> None"
-                            have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                              sorry
-                            show ?thesis
-                              using False h by blast
-                          qed
-                        next
-                          assume "Process1b a m st st2"
-                          then show ?thesis
-                            proof (cases "queued_msg st2 a2 = None")
-                            case True
-                            assume "queued_msg st2 a2 = None"
-                            have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                              sorry
-                            show ?thesis
-                              using True h by blast
-                          next
-                            case False
-                            assume "queued_msg st2 a2 \<noteq> None"
-                            have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                              by (smt (verit) False Process1b.simps SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>Process1b a m st st2\<close> \<open>is_safe a2\<close> assms(2) empty_iff mem_Collect_eq)
-                            show ?thesis
-                              using False h by blast
-                          qed
-                        qed
-                      qed
-                    qed
-                  qed
-              qed
-          qed
-      next
-        assume "LearnerAction st st2"
-        then show ?thesis
-          unfolding LearnerAction.simps
-        proof (elim exE)
-          fix ln
-          assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
-                  (\<exists>bal val. LearnerDecide ln bal val st st2)"
-          then show ?thesis
-          proof (elim disjE)
-            assume "\<exists>m. LearnerRecv ln m st st2"
-            then show ?thesis
-              proof (cases "queued_msg st2 a2 = None")
-                case True
-                assume "queued_msg st2 a2 = None"
-                have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                  by (smt (verit) Collect_cong LearnerRecv.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims True \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>\<exists>m. LearnerRecv ln m st st2\<close> \<open>is_safe a2\<close> assms(2) ext_inject surjective update_convs(3))
-                show ?thesis
-                  using True h by blast
-              next
-                case False
-                assume "queued_msg st2 a2 \<noteq> None"
-                have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                  by (smt (verit, del_insts) Collect_cong False LearnerRecv.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>\<exists>m. LearnerRecv ln m st st2\<close> \<open>is_safe a2\<close> assms(2) ext_inject surjective update_convs(3))
-                show ?thesis
-                  using False h by blast
-              qed
-          next
-            assume "\<exists>bal val. LearnerDecide ln bal val st st2"
-            then show ?thesis
-              proof (cases "queued_msg st2 a2 = None")
-                case True
-                assume "queued_msg st2 a2 = None"
-                have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                  by (smt (verit) Collect_empty_eq LearnerDecide.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims True \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>\<exists>bal val. LearnerDecide ln bal val st st2\<close> \<open>is_safe a2\<close> assms(2) ext_inject mem_Collect_eq surjective update_convs(9))
-                show ?thesis
-                  using True h by blast
-              next
-                case False
-                assume "queued_msg st2 a2 \<noteq> None"
-                have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                  by (smt (verit, del_insts) Collect_cong False LearnerDecide.elims(2) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>\<exists>bal val. LearnerDecide ln bal val st st2\<close> \<open>is_safe a2\<close> assms(2) ext_inject surjective update_convs(9))
-                show ?thesis
-                  using False h by blast
-              qed
-          qed
+                using \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> assms(2) es by auto
+            qed 
+          qed 
         qed
-      next
-        assume "FakeAcceptorAction st st2"
-        then show ?thesis
-           unfolding FakeAcceptorAction.simps
-         proof (elim exE)
-           fix a
-           assume h:"\<not> is_safe a \<and>
-               (FakeSend1b a st st2 \<or>
-                FakeSend2a a st st2)"
-           have "FakeSend1b a st st2 \<or> FakeSend2a a st st2"
-             using h by blast
-           then show ?thesis
-           proof (elim disjE)
-             assume "FakeSend1b a st st2"
-             then show ?thesis
-             unfolding FakeSend1b.simps
-           proof (elim exE)
-             fix fin
-             assume h: "let new1b = M1b a fin
-                         in WellFormed st new1b \<and>
-                            st2 = st\<lparr>msgs := new1b # msgs st\<rparr>"
-             have "recent_msgs_acc st2 = recent_msgs_acc st"
-               by (metis h select_convs(4) surjective update_convs(1))
-             have "msgs st2 = (M1b a fin) # msgs st"
-               by (metis h simps(1) simps(12) surjective)
-             show ?thesis
-             proof (cases "a = a2")
-                case True
-                assume "a = a2"
-                have "twoaLearnerLoopSpec st"
-                  using assms(1) by auto
-                then show ?thesis
-                  unfolding twoaLearnerLoopSpec.simps
-                 proof (cases "queued_msg st2 a2 = None")
-                    case True
-                    assume "queued_msg st2 a2 = None"
-                    have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                      sorry
-                    show ?thesis
-                      using True h by blast
-                 next
-                    case False
-                    assume "queued_msg st2 a2 \<noteq> None"
-                    have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                      sorry
-                    show ?thesis
-                      using False h by blast
-                  qed
-                next
-                  case False
-                assume "a \<noteq> a2"
-                show ?thesis
-                 proof (cases "queued_msg st2 a2 = None")
-                    case True
-                    assume "queued_msg st2 a2 = None"
-                    have "acc (M1b a fin) \<noteq> a2"
-                      using False by auto
-                    have "SentBy st2 a2 = SentBy st a2"
-                      using \<open>acc (M1b a fin) \<noteq> a2\<close> \<open>msgs st2 = M1b a fin # msgs st\<close> by force
-                    have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                      by (metis SafeAcceptorOwnMessagesRefsSpec.simps True \<open>SentBy st2 a2 = SentBy st a2\<close> \<open>SentBy st2 a2 \<noteq> {}\<close> \<open>is_safe a2\<close> \<open>recent_msgs_acc st2 = recent_msgs_acc st\<close> assms(2) h select_convs(6) surjective update_convs(1))
-                    show ?thesis
-                      using True h by blast
-                 next
-                    case False
-                    assume "queued_msg st2 a2 \<noteq> None"
-                    have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                      by (metis (mono_tags, lifting) False SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>a \<noteq> a2\<close> \<open>is_safe a2\<close> \<open>msgs st2 = M1b a fin # msgs st\<close> assms(2) empty_iff h hpaxos.acc.simps(2) mem_Collect_eq set_ConsD simps(12) simps(6) surjective)
-                    show ?thesis
-                      using False h by blast
-                  qed
-                  qed
-                  qed
-            next
-              assume "FakeSend2a a st st2"
-              show ?thesis
-              proof (cases "queued_msg st2 a2 = None")
-                case True
-                assume "queued_msg st2 a2 = None"
-                have h: "\<exists>m0\<in>set (recent_msgs_acc st2 a2). \<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran m0"
-                  sorry
-                show ?thesis
-                  using True h by blast
-              next
-                case False
-                assume "queued_msg st2 a2 \<noteq> None"
-                have h: "\<forall>m1\<in>SentBy st2 a2. m1 \<in> Tran (the (queued_msg st2 a2))"
-                  by (smt (verit, del_insts) FakeSend2a.simps False SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>FakeSend2a a st st2\<close> \<open>is_safe a2\<close> assms(2) empty_iff h hpaxos.acc.simps(3) mem_Collect_eq select_convs(1) select_convs(6) set_ConsD surjective update_convs(1))
-                show ?thesis
-                  using False h by blast
-              qed
-      qed
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+        by (smt (verit) Process1bLearnerLoopDone.elims(1) SafeAcceptorOwnMessagesRefsSpec.elims(2) SentBy.elims \<open>is_safe A\<close> \<open>mm \<in> SentBy st2 A\<close> assms(2) empty_iff ext_inject mem_Collect_eq surjective update_convs(7))
+    next
+      assume "LearnerAction st st2"
+      have "recent_msgs_acc st2 A = recent_msgs_acc st A"
+        by (smt (verit, ccfv_SIG) LearnerAction.simps LearnerDecide.elims(2) LearnerRecv.elims(2) \<open>LearnerAction st st2\<close> ext_inject surjective update_convs(3) update_convs(9))
+      have "queued_msg st2 A = queued_msg st A"
+        by (smt (verit, ccfv_SIG) LearnerAction.simps LearnerDecide.elims(2) LearnerRecv.elims(2) \<open>LearnerAction st st2\<close> ext_inject surjective update_convs(3) update_convs(9))
+      have "SentBy st2 A = SentBy st A"
+        by (smt (verit, best) Collect_cong LearnerAction.simps LearnerDecide.elims(2) LearnerRecv.elims(2) SentBy.simps \<open>LearnerAction st st2\<close> ext_inject surjective update_convs(3) update_convs(9))
+      then show ?thesis
+        using \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> \<open>queued_msg st2 A = queued_msg st A\<close> \<open>recent_msgs_acc st2 A = recent_msgs_acc st A\<close> assms(2) by auto
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      have "recent_msgs_acc st2 A = recent_msgs_acc st A"
+        by (metis FakeSend1b.elims(2) \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> select_convs(4) surjective update_convs(1))
+      have "queued_msg st2 A = queued_msg st A"
+        by (metis FakeSend1b.elims(2) \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> select_convs(6) surjective update_convs(1))
+      have "SentBy st2 A = SentBy st A"
+        by (smt (verit, ccfv_SIG) Collect_cong FakeSend1b.elims(2) SentBy.elims \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> \<open>is_safe A\<close> hpaxos.acc.simps(2) insert_iff list.simps(15) simps(1) simps(12) surjective)
+      show ?thesis
+        by (metis SafeAcceptorOwnMessagesRefsSpec.elims(2) \<open>SentBy st2 A = SentBy st A\<close> \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> \<open>queued_msg st2 A = queued_msg st A\<close> \<open>recent_msgs_acc st2 A = recent_msgs_acc st A\<close> assms(2))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      have "recent_msgs_acc st2 A = recent_msgs_acc st A"
+        by (metis FakeSend2a.simps \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> select_convs(4) surjective update_convs(1))
+      have "queued_msg st2 A = queued_msg st A"
+        by (metis FakeSend2a.simps \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> select_convs(6) surjective update_convs(1))
+      have "SentBy st2 A = SentBy st A"
+        by (smt (verit, best) Collect_cong FakeSend2a.simps SentBy.elims \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> \<open>is_safe A\<close> hpaxos.acc.simps(3) insert_iff list.simps(15) simps(1) simps(12) surjective)
+     then show ?thesis
+       using \<open>SentBy st2 A \<noteq> {}\<close> \<open>is_safe A\<close> \<open>queued_msg st2 A = queued_msg st A\<close> \<open>recent_msgs_acc st2 A = recent_msgs_acc st A\<close> assms(2) by force
     qed
   qed
 qed
-*)
 
 lemma KnownMsgsaccSpecInvariant :
   assumes "RecentMsgs_accSpec st"
@@ -2319,18 +2052,18 @@ proof (clarify)
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             unfolding Process1bLearnerLoop.simps
             proof (elim disjE)
@@ -2370,7 +2103,7 @@ proof (clarify)
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
@@ -2385,7 +2118,7 @@ proof (clarify)
                 then show ?thesis
                 proof
                   have "\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2"
-                    using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+                    using False h by blast
                   then show ?thesis
                   proof (elim exE)
                     fix m
@@ -2473,18 +2206,18 @@ proof (clarify)
       unfolding AcceptorProcessAction.simps
       proof (elim exE)
         fix a
-        assume "is_safe a \<and>
+        assume h: "is_safe a \<and>
                   (\<not> two_a_lrn_loop st a \<and>
                    (queued_msg st a \<noteq> None \<and>
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
-                    (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                    (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                    two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
         show ?thesis
         proof (cases "two_a_lrn_loop st a")
           case True
           have "Process1bLearnerLoop a st st2" 
-            using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+            using True h by blast
           then show ?thesis
             by (metis Tran.simps(2) Tran.simps(3) UnCI \<open>type m1 \<noteq> T1a\<close> singletonI type.elims)
         next
@@ -2493,7 +2226,7 @@ proof (clarify)
                     Process1b a (the (queued_msg st a)) st st2 \<or>
                     queued_msg st a = None \<and>
                     (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-            using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+            using False h by blast
           then show ?thesis
             by (metis Tran.simps(2) Tran.simps(3) UnCI \<open>type m1 \<noteq> T1a\<close> equals0I option.distinct(1) option.simps(15) set_empty_eq singletonD type.elims)
           qed
@@ -2547,18 +2280,18 @@ proof (clarify)
         unfolding AcceptorProcessAction.simps
         proof (elim exE)
           fix a
-          assume "is_safe a \<and>
+          assume h: "is_safe a \<and>
                     (\<not> two_a_lrn_loop st a \<and>
                      (queued_msg st a \<noteq> None \<and>
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
-                      (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
+                      (\<exists>m \<in> set (msgs st). Process1a a m st st2 \<or> Process1b a m st st2)) \<or>
                      two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)"
           show ?thesis
           proof (cases "two_a_lrn_loop st a")
             case True
             have "Process1bLearnerLoop a st st2" 
-              using True \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by blast
+              using True h by blast
             then show ?thesis
             unfolding Process1bLearnerLoop.simps
             proof (elim disjE)
@@ -2577,7 +2310,7 @@ proof (clarify)
                       Process1b a (the (queued_msg st a)) st st2 \<or>
                       queued_msg st a = None \<and>
                       (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2))"
-              using False \<open>is_safe a \<and> (\<not> two_a_lrn_loop st a \<and> (queued_msg st a \<noteq> None \<and> Process1b a (the (queued_msg st a)) st st2 \<or> queued_msg st a = None \<and> (\<exists>m. Process1a a m st st2 \<or> Process1b a m st st2)) \<or> two_a_lrn_loop st a \<and> Process1bLearnerLoop a st st2)\<close> by presburger
+              using False h by blast
             then show ?thesis
               proof (elim disjE)
                 assume "queued_msg st a \<noteq> None \<and>
