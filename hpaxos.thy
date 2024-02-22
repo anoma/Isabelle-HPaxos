@@ -678,7 +678,7 @@ fun LearnerDecide :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightar
 fun LearnerAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
   "LearnerAction st st2 = (
     \<exists>ln :: Learner.
-      (\<exists>m :: PreMessage. LearnerRecv ln m st st2) \<or>
+      (\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
       (\<exists>blt :: Ballot. \<exists>val :: Value. LearnerDecide ln blt val st st2)
   )"
 
@@ -1144,13 +1144,15 @@ proof -
         unfolding LearnerAction.simps
       proof (elim exE)
         fix ln
-        assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+        assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
                 (\<exists>blt val.
                     LearnerDecide ln blt val st
                      st2)"
         then show "isValidMessage x"
         proof (elim disjE)
-          assume "\<exists>m. LearnerRecv ln m st st2"
+          assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+          have "\<exists>m. LearnerRecv ln m st st2"
+            using \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> by blast
           then show ?thesis
           proof (elim exE)
             fix m
@@ -1315,11 +1317,13 @@ proof
       unfolding LearnerAction.simps
     proof (elim exE)
       fix ln
-      assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+      assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
               (\<exists>blt val. LearnerDecide ln blt val st st2)"
       then show ?thesis
       proof (elim disjE)
-        assume "\<exists>m. LearnerRecv ln m st st2"
+        assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+        have "\<exists>m. LearnerRecv ln m st st2"
+          using \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> by blast
         then show ?thesis
           by (metis (no_types, lifting) LearnerRecv.elims(2) RecentMsgs_accSpec.elims(1) \<open>is_safe a2\<close> assms(1) ext_inject surjective update_convs(3))
       next
@@ -1419,11 +1423,13 @@ proof
       unfolding LearnerAction.simps
     proof (elim exE)
       fix ln
-      assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+      assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
               (\<exists>blt val. LearnerDecide ln blt val st st2)"
       then show ?thesis
       proof (elim disjE)
-        assume "\<exists>m. LearnerRecv ln m st st2"
+        assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+        have "\<exists>m. LearnerRecv ln m st st2"
+          by (meson \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close>)
         then show ?thesis
           by (smt (verit, best) LearnerRecv.elims(2) RecentMsgs_lrnSpec.elims(2) assms(1) ext_inject list.set_intros(2) subsetD subsetI surjective update_convs(3))
       next
@@ -1541,11 +1547,13 @@ proof
       unfolding LearnerAction.simps
     proof (elim exE)
       fix ln
-      assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+      assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
               (\<exists>blt val. LearnerDecide ln blt val st st2)"
       then show ?thesis
       proof (elim disjE)
-        assume "\<exists>m. LearnerRecv ln m st st2"
+        assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+        have "\<exists>m. LearnerRecv ln m st st2"
+          using \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> by blast
         then show ?thesis
           by (smt (z3) LearnerRecv.elims(2) QueuedMsgSpec1.elims(1) \<open>is_safe a2 \<and> queued_msg st2 a2 \<noteq> None\<close> assms(2) ext_inject surjective update_convs(3))
       next
@@ -1618,7 +1626,7 @@ proof
       unfolding LearnerAction.simps
     proof (elim exE)
       fix ln
-      assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+      assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
               (\<exists>blt val. LearnerDecide ln blt val st st2)"
       then show ?thesis
       using \<open>is_safe a2 \<and> two_a_lrn_loop st2 a2\<close> assms(1) by auto
@@ -2062,8 +2070,6 @@ next
     by simp
 qed
 
-
-
 lemma KnownMsgsaccSpecInvariant :
   assumes "RecentMsgs_accSpec st"
   assumes "QueuedMsgSpec1 st"
@@ -2355,12 +2361,259 @@ proof (clarify)
 
 lemma KnownMsgslrnSpecInvariant :
   assumes "RecentMsgs_lrnSpec st"
-  assumes "QueuedMsgSpec1 st"
   assumes "KnownMsgs_lrnSpec st"
   assumes "Next st st2"
   shows "KnownMsgs_lrnSpec st2"
   unfolding KnownMsgs_lrnSpec.simps
-  sorry
+proof (clarify)
+  fix AL M
+  assume "M \<in> set (known_msgs_lrn st2 AL)"
+  have css: "ProposerSendAction st st2 \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                    \<and> queued_msg st A = None 
+                    \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A \<noteq> None 
+                      \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> Process1bLearnerLoopDone A st st2) \<or>
+        LearnerAction st st2 \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend1b A st st2) \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend2a A st st2)
+        "
+        using assms(3) next_split by presburger
+    then show "M \<in> set (msgs st2) \<and>
+               Proper_lrn st2 AL M \<and>
+               WellFormed st2 M \<and>
+               Tran M \<subseteq> set (known_msgs_lrn st2 AL) \<and>
+               Ex (B M)"
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+      unfolding ProposerSendAction.simps
+      proof (elim exE)
+        fix blt
+        assume "Send1a blt st st2"
+        have "set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)"
+          by (metis KnownMsgs_lrnSpec.elims(2) Send1a.elims(2) \<open>Send1a blt st st2\<close> assms(2) list.set_intros(2) simps(1) simps(12) simps(3) subset_code(1) surjective)
+        have "Proper_lrn st2 AL M"
+          by (metis KnownMsgs_lrnSpec.elims(2) Proper_lrn.simps Send1a.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Send1a blt st st2\<close> assms(2) simps(12) simps(3) surjective)
+        have "WellFormed st2 M"
+          by (metis KnownMsgs_lrnSpec.elims(2) Send1a.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Send1a blt st st2\<close> assms(2) ext_inject simps(12) surjective)
+        have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (metis KnownMsgs_lrnSpec.elims(2) Send1a.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Send1a blt st st2\<close> assms(2) simps(12) simps(3) surjective)
+        have "\<exists> b :: Ballot. B M b"
+          by simp
+        show ?thesis
+          using \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Proper_lrn st2 AL M\<close> \<open>Tran M \<subseteq> set (known_msgs_lrn st2 AL)\<close> \<open>WellFormed st2 M\<close> \<open>\<exists>b. B M b\<close> \<open>set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)\<close> by blast
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)"
+      then show ?thesis
+      proof (elim exE)
+        fix acc
+        assume h0: "is_safe acc \<and>
+                     queued_msg st acc = None \<and>
+                     (\<exists>m \<in> set (msgs st). Process1a acc m st st2)"
+        have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (metis KnownMsgs_lrnSpec.elims(2) Process1a.elims(2) Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> assms(2) h0)
+        have "\<exists> b :: Ballot. B M b"
+          by simp
+        then show ?thesis
+          by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) Process1a.elims(2) Proper_lrn.simps Send.elims(2) Store_acc.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> assms(2) h0 list.set_intros(2))
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+      proof (elim exE)
+        fix acc
+        assume "is_safe acc \<and>
+                queued_msg st acc \<noteq> None \<and>
+                Process1b acc (the (queued_msg st acc)) st st2"
+        have "WellFormed st2 M"
+          by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>is_safe acc \<and> queued_msg st acc \<noteq> None \<and> Process1b acc (the (queued_msg st acc)) st st2\<close> assms(2))
+        have "Proper_lrn st2 AL M"
+          by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) Process1b.simps Proper_lrn.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>is_safe acc \<and> queued_msg st acc \<noteq> None \<and> Process1b acc (the (queued_msg st acc)) st st2\<close> assms(2))
+        have "\<exists> b :: Ballot. B M b"
+          by simp
+        have "set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)"
+          by (smt (verit) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) \<open>is_safe acc \<and> queued_msg st acc \<noteq> None \<and> Process1b acc (the (queued_msg st acc)) st st2\<close> assms(2) subsetI)
+        have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (smt (verit, ccfv_SIG) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>is_safe acc \<and> queued_msg st acc \<noteq> None \<and> Process1b acc (the (queued_msg st acc)) st st2\<close> assms(2))
+        then show ?thesis
+          using \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Proper_lrn st2 AL M\<close> \<open>WellFormed st2 M\<close> \<open>\<exists>b. B M b\<close> \<open>set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)\<close> by blast
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+        proof (elim exE)
+          fix acc
+          assume h3: "is_safe acc \<and>
+                  queued_msg st acc = None \<and>
+                  (\<exists>m\<in>set (msgs st). Process1b acc m st st2)"
+          have "\<exists>m. m\<in>set (msgs st) \<and> Process1b acc m st st2"
+            using h3 by blast
+          then show ?thesis
+          proof (elim exE)
+            fix msg
+            assume "msg\<in>set (msgs st) \<and> Process1b acc msg st st2"
+            have "WellFormed st2 M"
+              by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>msg \<in> set (msgs st) \<and> Process1b acc msg st st2\<close> assms(2))
+            have "Proper_lrn st2 AL M"
+              by (smt (verit, best) KnownMsgs_lrnSpec.elims(2) Process1b.simps Proper_lrn.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>msg \<in> set (msgs st) \<and> Process1b acc msg st st2\<close> assms(2))
+            have "\<exists> b :: Ballot. B M b"
+              by simp
+            have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+              by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>msg \<in> set (msgs st) \<and> Process1b acc msg st st2\<close> assms(2))
+            then show ?thesis
+              by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) Process1b.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Proper_lrn st2 AL M\<close> \<open>WellFormed st2 M\<close> \<open>msg \<in> set (msgs st) \<and> Process1b acc msg st st2\<close> assms(2))
+          qed
+        qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+      proof (elim exE)
+        fix acc
+        assume h3: "is_safe acc \<and>
+                two_a_lrn_loop st acc \<and>
+                (\<exists>l. Process1bLearnerLoopStep acc l st st2)"
+        have "\<exists>l. Process1bLearnerLoopStep acc l st st2" using h3 by blast
+        then show ?thesis
+        proof (elim exE)
+          fix lrnn
+          assume "Process1bLearnerLoopStep acc lrnn st st2"
+          have "WellFormed st2 M"
+            by (metis KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> assms(2))
+          have "Proper_lrn st2 AL M"
+            by (metis KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopStep.elims(2) Proper_lrn.simps Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> assms(2))
+          have "\<exists> b :: Ballot. B M b"
+            by simp
+          have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+            by (metis KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> assms(2))
+          then show ?thesis
+            by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopStep.elims(2) Send.elims(2) Store_acc.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Process1bLearnerLoopStep acc lrnn st st2\<close> \<open>Proper_lrn st2 AL M\<close> \<open>WellFormed st2 M\<close> assms(2) list.set_intros(2))
+          qed 
+        qed
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+      proof (elim exE)
+        fix a
+        assume "is_safe a \<and>
+                 two_a_lrn_loop st a \<and>
+                 Process1bLearnerLoopDone a st st2"
+        have "set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)"
+          by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopDone.elims(1) \<open>is_safe a \<and> two_a_lrn_loop st a \<and> Process1bLearnerLoopDone a st st2\<close> assms(2) simps(1) simps(3) subsetI surjective update_convs(7))
+        have "WellFormed st2 M"
+          by (smt (verit, best) KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopDone.elims(1) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>is_safe a \<and> two_a_lrn_loop st a \<and> Process1bLearnerLoopDone a st st2\<close> assms(2) ext_inject surjective update_convs(7))
+        have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) Process1bLearnerLoopDone.elims(1) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>is_safe a \<and> two_a_lrn_loop st a \<and> Process1bLearnerLoopDone a st st2\<close> assms(2) simps(3) surjective update_convs(7))
+        then show ?thesis
+          by (metis Message_ref_Tran Proper_lrn.simps WellFormed.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>WellFormed st2 M\<close> \<open>set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)\<close> subset_iff)
+      qed
+    next
+      assume "LearnerAction st st2"
+      then show ?thesis
+        unfolding LearnerAction.simps
+      proof (elim exE)
+        fix ln
+        assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
+                (\<exists>blt val. LearnerDecide ln blt val st st2)"
+        then show ?thesis
+        proof (elim disjE)
+          assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+          have "\<exists>m. m \<in> set (msgs st) \<and> LearnerRecv ln m st st2"
+            using \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> by blast
+          then show ?thesis
+          proof (elim exE)
+            fix m
+            assume "m \<in> set (msgs st) \<and> LearnerRecv ln m st st2"
+            have "Proper_lrn st2 AL M"
+              by (smt (verit, ccfv_SIG) KnownMsgs_lrnSpec.elims(2) LearnerRecv.elims(2) Proper_lrn.simps Recv_lrn.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> assms(2) ext_inject list.set_intros(2) set_ConsD surjective update_convs(3))
+            have "WellFormed st M"
+              by (smt (verit, ccfv_threshold) KnownMsgs_lrnSpec.elims(2) LearnerAction.simps LearnerDecide.elims(2) LearnerRecv.elims(2) Recv_lrn.elims(2) \<open>LearnerAction st st2\<close> \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> assms(2) set_ConsD simps(3) surjective update_convs(3) update_convs(9))
+            have "WellFormed st2 M"
+              by (metis (no_types, lifting) LearnerRecv.elims(2) WellFormed_monotone \<open>WellFormed st M\<close> \<open>m \<in> set (msgs st) \<and> LearnerRecv ln m st st2\<close> simps(10) surjective update_convs(3))
+            have "set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)"
+              by (smt (verit, del_insts) KnownMsgs_lrnSpec.elims(2) LearnerRecv.elims(2) \<open>m \<in> set (msgs st) \<and> LearnerRecv ln m st st2\<close> assms(2) ext_inject set_ConsD subsetI surjective update_convs(3))
+            have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+              by (smt (verit) KnownMsgs_lrnSpec.elims(2) LearnerRecv.elims(2) Proper_lrn.elims(2) Recv_lrn.simps Tran_eq UN_E Un_iff \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>m. m \<in> set (msgs st) \<and> LearnerRecv ln m st st2\<close> assms(2) list.set_intros(2) set_ConsD simps(3) singletonD subset_iff surjective update_convs(3))
+            show ?thesis
+              by (smt (verit, ccfv_threshold) KnownMsgs_lrnSpec.elims(2) LearnerRecv.elims(2) WellFormed.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Proper_lrn st2 AL M\<close> \<open>Tran M \<subseteq> set (known_msgs_lrn st2 AL)\<close> \<open>WellFormed st2 M\<close> \<open>m \<in> set (msgs st) \<and> LearnerRecv ln m st st2\<close> assms(2) set_ConsD simps(1) simps(3) surjective update_convs(3))
+          qed
+        next
+          assume "\<exists>blt val. LearnerDecide ln blt val st st2"
+          have "set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)"
+            by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) LearnerDecide.elims(2) \<open>\<exists>blt val. LearnerDecide ln blt val st st2\<close> assms(2) simps(1) simps(3) subset_code(1) surjective update_convs(9))
+          have "Proper_lrn st2 AL M"
+            by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) LearnerDecide.elims(2) Proper_lrn.simps \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>blt val. LearnerDecide ln blt val st st2\<close> assms(2) ext_inject surjective update_convs(9))
+          have "WellFormed st2 M"
+            by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) LearnerDecide.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>blt val. LearnerDecide ln blt val st st2\<close> assms(2) simps(10) simps(3) surjective update_convs(9))
+          have "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+            by (metis (no_types, lifting) KnownMsgs_lrnSpec.elims(2) LearnerDecide.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>blt val. LearnerDecide ln blt val st st2\<close> assms(2) simps(3) surjective update_convs(9))
+          then show ?thesis
+            by (metis WellFormed.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>Proper_lrn st2 AL M\<close> \<open>WellFormed st2 M\<close> \<open>set (known_msgs_lrn st2 AL) \<subseteq> set (msgs st2)\<close> subsetD)
+        qed
+      qed
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      then show ?thesis
+      proof (intro conjI)
+        show "M \<in> set (msgs st2)"
+          by (metis FakeSend1b.elims(2) KnownMsgs_lrnSpec.simps \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) ext_inject list.set_intros(2) simps(12) surjective)
+      next
+        show "Proper_lrn st2 AL M"
+          by (metis FakeSend1b.elims(2) KnownMsgs_lrnSpec.elims(2) Proper_lrn.simps \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) ext_inject simps(12) surjective)
+      next
+        show "WellFormed st2 M"
+          by (metis FakeSend1b.elims(2) KnownMsgs_lrnSpec.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) select_convs(10) select_convs(3) surjective update_convs(1))
+      next
+        show "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (metis FakeSend1b.elims(2) KnownMsgs_lrnSpec.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) simps(12) simps(3) surjective)
+      next
+        show "Ex (B M)"
+          by fastforce
+      qed
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      show ?thesis
+      proof (intro conjI)
+        show "M \<in> set (msgs st2)"
+          by (metis FakeSend2a.simps KnownMsgs_lrnSpec.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> assms(2) ext_inject list.set_intros(2) simps(12) surjective)
+      next
+        show "Proper_lrn st2 AL M"
+          by (metis FakeSend2a.simps KnownMsgs_lrnSpec.elims(2) Proper_lrn.simps \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> assms(2) ext_inject simps(12) surjective)
+      next
+        show "WellFormed st2 M"
+          by (metis (no_types, lifting) FakeSend2a.simps KnownMsgs_lrnSpec.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> assms(2) ext_inject surjective update_convs(1))
+      next
+        show "Tran M \<subseteq> set (known_msgs_lrn st2 AL)"
+          by (metis FakeSend2a.simps KnownMsgs_lrnSpec.elims(2) \<open>M \<in> set (known_msgs_lrn st2 AL)\<close> \<open>\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2\<close> assms(2) simps(12) simps(3) surjective)
+      next
+        show "Ex (B M)"
+          by fastforce
+      qed
+    qed
+  qed
 
 lemma MsgsSafeAcceptorSpecInvariant :
   assumes "SafeAcceptorOwnMessagesRefsSpec st"
@@ -2425,7 +2678,7 @@ proof (clarify)
       unfolding LearnerAction.simps
     proof (elim exE)
       fix ln
-      assume "(\<exists>m. LearnerRecv ln m st st2) \<or>
+      assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
               (\<exists>blt val. LearnerDecide ln blt val st st2)"
       then show ?thesis
         by (metis (no_types, lifting) LearnerDecide.elims(2) LearnerRecv.elims(2) MsgsSafeAcceptorSpec.elims(2) \<open>is_safe (acc m1)\<close> \<open>m1 \<in> set (msgs st2)\<close> \<open>type m1 \<noteq> T1a\<close> assms(3) ext_inject surjective update_convs(3) update_convs(9))
@@ -2522,14 +2775,13 @@ proof (clarify)
       unfolding LearnerAction.simps
       proof (elim exE)
         fix ln
-        assume "(\<exists>m. LearnerRecv ln m st
-                st2) \<or>
-                (\<exists>blt val.
-                    LearnerDecide ln blt val st
-                     st2)"
+        assume "(\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
+                (\<exists>blt val. LearnerDecide ln blt val st st2)"
         then show ?thesis
         proof (elim disjE)
-          assume "\<exists>m. LearnerRecv ln m st st2"
+          assume "\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2"
+          have "\<exists>m. LearnerRecv ln m st st2"
+            using \<open>\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2\<close> by blast
           have "decision st2 = decision st"
             using \<open>\<exists>m. LearnerRecv ln m st st2\<close> by fastforce
           then show ?thesis
