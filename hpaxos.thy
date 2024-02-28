@@ -212,8 +212,7 @@ record State =
   msgs :: "PreMessage list"
   known_msgs_acc :: "Acceptor \<Rightarrow> PreMessage list"
   known_msgs_lrn :: "Learner \<Rightarrow> PreMessage list"
-  recent_msgs_acc :: "Acceptor \<Rightarrow> PreMessage list"
-  recent_msgs_lrn :: "Learner \<Rightarrow> PreMessage list"
+  recent_msgs :: "Acceptor \<Rightarrow> PreMessage list"
   queued_msg :: "Acceptor \<Rightarrow> PreMessage option"
   two_a_lrn_loop :: "Acceptor \<Rightarrow> bool"
   processed_lrns :: "Acceptor \<Rightarrow> Learner set"
@@ -228,8 +227,7 @@ fun Init :: "(Ballot \<Rightarrow> Value) \<Rightarrow> State" where
       msgs = [], 
       known_msgs_acc = (\<lambda>_. []), 
       known_msgs_lrn = (\<lambda>_. []), 
-      recent_msgs_acc = (\<lambda>_. []), 
-      recent_msgs_lrn = (\<lambda>_. []), 
+      recent_msgs = (\<lambda>_. []), 
       queued_msg = (\<lambda>_. NoMessage), 
       two_a_lrn_loop = (\<lambda>_. False), 
       processed_lrns = (\<lambda>_. {}), 
@@ -382,16 +380,6 @@ fun Store_acc :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
     \<and> known_msgs_lrn st2 = known_msgs_lrn st
   )"
 
-fun Store_lrn :: "Learner \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where 
-  "Store_lrn l m st st2 = (
-    known_msgs_lrn st2 = (
-        \<lambda>x. if l = x 
-            then m # known_msgs_lrn st x
-            else known_msgs_lrn st x
-    )
-    \<and> known_msgs_acc st2 = known_msgs_acc st
-  )"
-
 fun Send1a :: "Ballot \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
   "Send1a b st st2 = (st2 = st\<lparr>msgs := M1a b # msgs st\<rparr>)"
 
@@ -422,31 +410,31 @@ fun Process :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarr
               else known_msgs_acc st x\<rparr> in
     case m of
       M1a a2 \<Rightarrow> 
-        let new1b = M1b a (m # recent_msgs_acc st a) in 
+        let new1b = M1b a (m # recent_msgs st a) in 
         if WellFormed st new1b
         then stp\<lparr>msgs := new1b # msgs st,
-                 recent_msgs_acc := 
+                 recent_msgs := 
                    \<lambda>x. if x = a 
                        then [] 
-                       else recent_msgs_acc st x,
+                       else recent_msgs st x,
                  queued_msg := 
                    \<lambda>x. if x = a 
                        then Some new1b 
                        else queued_msg st x\<rparr>
-        else stp\<lparr>recent_msgs_acc :=
+        else stp\<lparr>recent_msgs :=
                    \<lambda>x. if x = a 
-                       then m # recent_msgs_acc st x 
-                       else recent_msgs_acc st x\<rparr>
+                       then m # recent_msgs st x 
+                       else recent_msgs st x\<rparr>
     | M1b a2 ms \<Rightarrow> 
         let stpp = 
           stp\<lparr>queued_msg := 
                   \<lambda>x. if x = a
                       then None
                       else queued_msg st x,
-              recent_msgs_acc :=
+              recent_msgs :=
                   \<lambda>x. if x = a 
-                      then m # recent_msgs_acc st x 
-                      else recent_msgs_acc st x\<rparr> in
+                      then m # recent_msgs st x 
+                      else recent_msgs st x\<rparr> in
         if \<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)
         then stpp
         else stpp\<lparr>two_a_lrn_loop := 
@@ -458,37 +446,36 @@ fun Process :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarr
                         then {}
                         else processed_lrns st x\<rparr>
     | M2a a2 l ms \<Rightarrow> 
-        stp\<lparr>recent_msgs_acc :=
+        stp\<lparr>recent_msgs :=
                 \<lambda>x. if x = a 
-                    then m # recent_msgs_acc st x 
-                    else recent_msgs_acc st x\<rparr>
+                    then m # recent_msgs st x 
+                    else recent_msgs st x\<rparr>
   )"
 
 (* Process1a as a predicate *)
 fun Process1a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
   "Process1a a m st st2 = (
-    let new1b = M1b a (m # recent_msgs_acc st a) in 
+    let new1b = M1b a (m # recent_msgs st a) in 
     type m = T1a
     \<and> Recv_acc st a m
     \<and> Store_acc a m st st2
     \<and> (if WellFormed st new1b
        then 
           Send new1b st st2
-          \<and> (recent_msgs_acc st2 = (
+          \<and> (recent_msgs st2 = (
               \<lambda>a2. if a2 = a then [] 
-                             else recent_msgs_acc st a2))
+                             else recent_msgs st a2))
           \<and> (queued_msg st2 = (
               \<lambda>a2. if a2 = a then Some new1b 
                              else queued_msg st a2))
        else 
-          (recent_msgs_acc st2 = (
-              \<lambda>a2. if a2 = a then m # recent_msgs_acc st a2 
-                             else recent_msgs_acc st a2))
+          (recent_msgs st2 = (
+              \<lambda>a2. if a2 = a then m # recent_msgs st a2 
+                             else recent_msgs st a2))
           \<and> (msgs st = msgs st2)
           \<and> (queued_msg st = queued_msg st2)
       )
 
-    \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
     \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
     \<and> (processed_lrns st2 = processed_lrns st)
     \<and> (decision st2 = decision st)
@@ -501,11 +488,10 @@ fun Process1b :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
     type m = T1b
     \<and> Recv_acc st a m
     \<and> Store_acc a m st st2
-    \<and> recent_msgs_acc st2 = (
+    \<and> recent_msgs st2 = (
         \<lambda>x. if x = a 
-            then m # recent_msgs_acc st x
-            else recent_msgs_acc st x )
-    \<and> recent_msgs_lrn st2 = recent_msgs_lrn st
+            then m # recent_msgs st x
+            else recent_msgs st x )
     \<and> ((\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
         two_a_lrn_loop st2 = (\<lambda>x.
           if x = a
@@ -536,11 +522,10 @@ fun Process2a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
     type m = T2a
     \<and> Recv_acc st a m
     \<and> Store_acc a m st st2
-    \<and> recent_msgs_acc st2 = (
+    \<and> recent_msgs st2 = (
         \<lambda>x. if x = a 
-            then m # recent_msgs_acc st x
-            else recent_msgs_acc st x )
-    \<and> recent_msgs_lrn st2 = recent_msgs_lrn st
+            then m # recent_msgs st x
+            else recent_msgs st x )
 
     \<and> (msgs st2 = msgs st)
     \<and> (queued_msg st2 = queued_msg st)
@@ -555,7 +540,7 @@ fun ProposerSendAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
 
 fun Process1bLearnerLoopStep :: "Acceptor \<Rightarrow> Learner \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
   "Process1bLearnerLoopStep a ln st st2 = (
-    let new2a = M2a ln a (recent_msgs_acc st a) in
+    let new2a = M2a ln a (recent_msgs st a) in
     processed_lrns st2 = (
       \<lambda>x . if x = a
            then {ln} \<union> processed_lrns st x
@@ -564,18 +549,16 @@ fun Process1bLearnerLoopStep :: "Acceptor \<Rightarrow> Learner \<Rightarrow> St
        then (
             Send new2a st st2
           \<and> Store_acc a new2a st st2
-          \<and> (recent_msgs_acc st2 = (
+          \<and> (recent_msgs st2 = (
               \<lambda>x . if x = a
                  then [new2a]
-                 else recent_msgs_acc st x))
-          \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
+                 else recent_msgs st x))
           )
        else (
             (msgs st2 = msgs st)
           \<and> (known_msgs_acc st2 = known_msgs_acc st)
           \<and> (known_msgs_lrn st2 = known_msgs_lrn st)
-          \<and> (recent_msgs_acc st2 = recent_msgs_acc st)
-          \<and> (recent_msgs_lrn st2 = recent_msgs_lrn st)
+          \<and> (recent_msgs st2 = recent_msgs st)
           )
        )
 
@@ -592,7 +575,7 @@ fun Process1bLearnerLoopStepFun :: "Acceptor \<Rightarrow> Learner \<Rightarrow>
                   \<lambda>x . if x = a
                        then {ln} \<union> processed_lrns st x
                        else processed_lrns st x)\<rparr>;
-        new2a = M2a ln a (recent_msgs_acc st a) in
+        new2a = M2a ln a (recent_msgs st a) in
     if \<not> (WellFormed st new2a)
     then stp
     else 
@@ -601,10 +584,10 @@ fun Process1bLearnerLoopStepFun :: "Acceptor \<Rightarrow> Learner \<Rightarrow>
               \<lambda>x. if a = x 
                   then new2a # known_msgs_acc st x
                   else known_msgs_acc st x),
-          recent_msgs_acc := (
+          recent_msgs := (
               \<lambda>x . if x = a
                  then [new2a]
-                 else recent_msgs_acc st x)\<rparr>
+                 else recent_msgs st x)\<rparr>
   )"
 
 fun Process1bLearnerLoopDone :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
