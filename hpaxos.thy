@@ -461,7 +461,7 @@ fun Process1a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
     \<and> Store_acc a m st st2
     \<and> (if WellFormed st new1b
        then 
-          Send new1b st st2
+          Send new1b sSt st2
           \<and> (recent_msgs st2 = (
               \<lambda>a2. if a2 = a then [] 
                              else recent_msgs st a2))
