@@ -259,40 +259,130 @@ fun Acceptor_Enabled :: "Acceptor \<Rightarrow> State \<Rightarrow> bool" where
     (\<exists>m. Recv_acc st a m) \<or> (\<exists>ln :: Learner. ln \<notin> processed_lrns st a)
   )"
 
+
+lemma Process1bLearnerLoopStepAlt1:
+  assumes "WellFormed st (M2a ln a (recent_msgs st a))"
+  shows "Process1bLearnerLoopStep a ln st (
+                              st\<lparr>processed_lrns := (
+                                    \<lambda>x . if x = a
+                                         then {ln} \<union> processed_lrns st x
+                                         else processed_lrns st x),
+                                msgs := M2a ln a (recent_msgs st a) # msgs st, 
+                                known_msgs_acc := (
+                                    \<lambda>x. if a = x 
+                                        then M2a ln a (recent_msgs st a) # known_msgs_acc st x
+                                        else known_msgs_acc st x),
+                                recent_msgs := (
+                                    \<lambda>x . if x = a
+                                       then [M2a ln a (recent_msgs st a)]
+                                       else recent_msgs st x) \<rparr>)"
+proof -
+  define new2a where "new2a = M2a ln a (recent_msgs st a)"
+  define st2 where "st2 = (st\<lparr>processed_lrns := (
+                                    \<lambda>x . if x = a
+                                         then {ln} \<union> processed_lrns st x
+                                         else processed_lrns st x),
+                                msgs := new2a # msgs st, 
+                                known_msgs_acc := (
+                                    \<lambda>x. if a = x 
+                                        then new2a # known_msgs_acc st x
+                                        else known_msgs_acc st x),
+                                recent_msgs := (
+                                    \<lambda>x . if x = a
+                                       then [new2a]
+                                       else recent_msgs st x) \<rparr>)"
+  have "Send new2a st st2
+          \<and> Store_acc a new2a st st2
+          \<and> (recent_msgs st2 = (
+              \<lambda>x . if x = a
+                 then [new2a]
+                 else recent_msgs st x))" 
+    by (simp add: st2_def)
+  have "processed_lrns st2 = (
+          \<lambda>x . if x = a
+               then {ln} \<union> processed_lrns st x
+               else processed_lrns st x)" 
+    by (simp add: st2_def)
+  have "(queued_msg st2 = queued_msg st)
+          \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
+          \<and> (decision st2 = decision st)
+          \<and> (BVal st2 = BVal st)" 
+    by (simp add: st2_def)
+  show ?thesis
+    unfolding Process1bLearnerLoopStep.simps simps
+    using assms by force
+qed
+
+lemma Process1bLearnerLoopStepAlt2:
+  assumes "\<not> WellFormed st (M2a ln a (recent_msgs st a))"
+  shows "Process1bLearnerLoopStep a ln st (
+                        st\<lparr>processed_lrns := (
+                                    \<lambda>x . if x = a
+                                         then {ln} \<union> processed_lrns st x
+                                         else processed_lrns st x)\<rparr>)"
+proof -
+  define st2 where "st2 = st\<lparr>processed_lrns := (
+                                    \<lambda>x . if x = a
+                                         then {ln} \<union> processed_lrns st x
+                                         else processed_lrns st x)\<rparr>"
+  have "processed_lrns st2 = (
+          \<lambda>x . if x = a
+               then {ln} \<union> processed_lrns st x
+               else processed_lrns st x)" 
+    by (simp add: st2_def)
+  have "(msgs st2 = msgs st)
+          \<and> (known_msgs_acc st2 = known_msgs_acc st)
+          \<and> (known_msgs_lrn st2 = known_msgs_lrn st)
+          \<and> (recent_msgs st2 = recent_msgs st)" 
+    by (simp add: st2_def)
+  have "(queued_msg st2 = queued_msg st)
+          \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
+          \<and> (decision st2 = decision st)
+          \<and> (BVal st2 = BVal st)" 
+    by (simp add: st2_def)
+  show ?thesis
+    unfolding Process1bLearnerLoopStep.simps
+    using assms by force
+qed
+
+lemma Process1bLearnerLoopStep_Enabled:
+  "Enabled (Process1bLearnerLoopStep a l) st = True"
+  by (meson Enabled.elims(3) Process1bLearnerLoopStepAlt1 Process1bLearnerLoopStepAlt2)
+
+lemma Process1bLearnerLoopDone_Enabled:
+  "Enabled (Process1bLearnerLoopDone a) st = (\<forall>ln :: Learner. ln \<in> processed_lrns st a)"
+  by auto
+
 (* Process1bLearnerLoop is always enabled.*)
 lemma Process1bLearnerLoop_Enabled:
   "Enabled (Process1bLearnerLoop a) st = True"
-  sorry
+  by (metis Enabled.elims(1) Process1bLearnerLoop.elims(3) Process1bLearnerLoopDone_Enabled Process1bLearnerLoopStep_Enabled)
 
-
-(*
-define new1b where "new1b = M1b a (m # recent_msgs st a)"
-*)
-
-fun AcceptorProcessAction_Enabled :: "Acceptor \<Rightarrow> State \<Rightarrow> bool" where
-  "AcceptorProcessAction_Enabled a st = (
+lemma AcceptorAction_Enabled:
+  shows "Enabled (AcceptorAction a) st = (
     is_safe a \<and> (
       (\<not> two_a_lrn_loop st a \<and>
        ((queued_msg st a \<noteq> None \<and> 
-         Process1b_Enabled a (the (queued_msg st a)) st) \<or> 
+         type (the (queued_msg st a)) = T1b \<and> 
+         Recv_acc st a (the (queued_msg st a))) \<or> 
         (queued_msg st a = None \<and> (
-          \<exists>m \<in> set (msgs st). Process1a_Enabled a m st \<or> Process1b_Enabled a m st
+          \<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)
         ))))
-      \<or> (two_a_lrn_loop st a))
+      \<or> two_a_lrn_loop st a)
   )"
+  by (metis AcceptorAction.simps Enabled.elims(1) Process1a_Enabled Process1bLearnerLoop_Enabled Process1b_Enabled)
 
+lemma LearnerRecv_Enabled:
+  shows "Enabled (LearnerRecv l m) st = Recv_lrn st l m"
+  using Enabled.simps LearnerRecv.simps by presburger
 
-fun LearnerRecv_Enabled :: "Learner \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> bool" where
-  "LearnerRecv_Enabled l m st = (
-    Recv_lrn st l m
-  )"
+lemma LearnerDecide_Enabled:
+  shows "Enabled (LearnerDecide l b v) st = ChosenIn st l b v"
+  using Enabled.simps LearnerDecide.simps by presburger
 
-fun LearnerDecide_Enabled :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> State \<Rightarrow> bool" where
-  "LearnerDecide_Enabled l b v st = ChosenIn st l b v"
-
-fun WF :: "(State \<Rightarrow> bool) \<Rightarrow> (State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
-  "WF p_Enabled p f = (
-    \<forall>i. (\<forall>j \<ge> i. p_Enabled (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (j + 1)))
+fun WF :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "WF p f = (
+    \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (j + 1)))
   )"
 
 fun BallotLimit1 :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> nat \<Rightarrow> bool" where
@@ -306,11 +396,11 @@ fun BallotSend :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> 
 
 fun EventuallyProccess1a :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> Acceptor set \<Rightarrow> bool" where
   "EventuallyProccess1a f b Q = 
-    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1a_Enabled a m) (Process1a a m) f))"
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1a a m) f))"
 
 fun EventuallyProccess1b :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> Acceptor set \<Rightarrow> bool" where
   "EventuallyProccess1b f b Q = 
-    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1b_Enabled a m) (Process1b a m) f))"
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1b a m) f))"
 
 fun EventuallyProcess1bLearnerLoop :: "(nat \<Rightarrow> State) \<Rightarrow> Acceptor set \<Rightarrow> bool" where
   "EventuallyProcess1bLearnerLoop f Q = 
@@ -318,12 +408,11 @@ fun EventuallyProcess1bLearnerLoop :: "(nat \<Rightarrow> State) \<Rightarrow> A
 
 fun EventuallyLearnerRecv :: "(nat \<Rightarrow> State) \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> bool" where
   "EventuallyLearnerRecv f L b = 
-    (\<forall>m :: PreMessage. B m b \<longrightarrow> WF (LearnerRecv_Enabled L m) (LearnerRecv L m) f)"
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> WF (LearnerRecv L m) f)"
 
 fun EventuallyLearnerDecide :: "(nat \<Rightarrow> State) \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> bool" where
   "EventuallyLearnerDecide f L b = 
-    WF (\<lambda>st. \<exists> v :: Value. LearnerDecide_Enabled L b v st) 
-       (\<lambda>st st2. \<exists> v :: Value. LearnerDecide L b v st st2) f"
+    WF (\<lambda>st st2. \<exists> v :: Value. LearnerDecide L b v st st2) f"
 
 fun Liveness_Assumptions :: "(nat \<Rightarrow> State) \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Acceptor set \<Rightarrow> nat \<Rightarrow> bool" where
  "Liveness_Assumptions f L b Q i = (

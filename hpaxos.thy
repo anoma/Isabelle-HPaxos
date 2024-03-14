@@ -607,9 +607,9 @@ fun Process1bLearnerLoop :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<
     \<or> Process1bLearnerLoopDone a st st2
   )"
 
-fun AcceptorProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
-  "AcceptorProcessAction st st2 = (
-    \<exists>a :: Acceptor. is_safe a \<and> (
+fun AcceptorAction :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "AcceptorAction a st st2 = (
+    is_safe a \<and> (
       (\<not> two_a_lrn_loop st a \<and>
        ((queued_msg st a \<noteq> None \<and> 
          Process1b a (the (queued_msg st a)) st st2) \<or> 
@@ -619,6 +619,9 @@ fun AcceptorProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" wher
       \<or> (two_a_lrn_loop st a \<and> 
          Process1bLearnerLoop a st st2)
   ))"
+
+fun AcceptorProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "AcceptorProcessAction st st2 = (\<exists>a :: Acceptor. AcceptorAction a st st2)"
 
 fun FakeSend1b :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
   "FakeSend1b a st st2 = (

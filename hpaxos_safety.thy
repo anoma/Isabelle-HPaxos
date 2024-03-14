@@ -146,7 +146,7 @@ proof -
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h: "is_safe a \<and>
@@ -472,7 +472,7 @@ proof
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h:"is_safe a \<and>
@@ -597,7 +597,7 @@ proof
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h: "is_safe a \<and>
@@ -715,7 +715,7 @@ proof
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h: "is_safe a \<and>
@@ -785,7 +785,7 @@ proof (clarify)
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h: "is_safe a \<and>
@@ -902,7 +902,7 @@ proof -
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      by (metis AcceptorProcessAction.elims(2) Process1bLearnerLoop.simps)
+      by (metis AcceptorAction.simps AcceptorProcessAction.elims(2) Process1bLearnerLoop.simps)
   next
     assume "LearnerAction st st2"
     then show ?thesis
@@ -1256,7 +1256,7 @@ proof (clarify)
         (\<exists>A :: Acceptor. \<not> (is_safe A)
                       \<and> FakeSend2a A st st2)
         "
-      by (metis AcceptorProcessAction.simps FakeAcceptorAction.elims(1) Next.elims(2) Process1bLearnerLoop.simps assms(4))
+      by (metis AcceptorAction.simps AcceptorProcessAction.simps FakeAcceptorAction.elims(1) Next.elims(2) Process1bLearnerLoop.simps assms(4))
     then show "M \<in> set (msgs st2) \<and>
                Proper_acc st2 AL M \<and>
                WellFormed st2 M \<and>
@@ -1535,7 +1535,7 @@ proof (clarify)
   next
     assume "AcceptorProcessAction st st2"
     then show ?thesis
-      unfolding AcceptorProcessAction.simps
+      unfolding AcceptorProcessAction.simps AcceptorAction.simps
       proof (elim exE)
         fix a
         assume h: "is_safe a \<and>
@@ -1609,7 +1609,7 @@ proof (clarify)
     next
       assume "AcceptorProcessAction st st2"
       then show ?thesis 
-        unfolding AcceptorProcessAction.simps
+        unfolding AcceptorProcessAction.simps AcceptorAction.simps
         proof (elim exE)
           fix a
           assume h: "is_safe a \<and>
