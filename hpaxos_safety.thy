@@ -1803,4 +1803,143 @@ theorem SafetyResult :
   shows "\<forall>n. Safety (f n)"
   by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
 
+theorem TypeOKResult :
+  assumes "Spec f"
+  shows "\<forall>n. TypeOK (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem RecentMsgsSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. RecentMsgsSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem KnownMsgs_accSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. KnownMsgs_accSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem QueuedMsgResult :
+  assumes "Spec f"
+  shows "\<forall>n. QueuedMsgSpec1 (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem twoaLearnerLoopSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. twoaLearnerLoopSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem SafeAcceptorOwnMessagesRefsSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. SafeAcceptorOwnMessagesRefsSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem MsgsSafeAcceptorSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. MsgsSafeAcceptorSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+theorem DecisionSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. DecisionSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
+lemma next_msgs_preserved:
+  assumes "Next st st2"
+      and "x \<in> set (msgs st)"
+  shows "x \<in> set (msgs st2)"
+proof -
+  have css: "ProposerSendAction st st2 \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                    \<and> queued_msg st A = None 
+                    \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A \<noteq> None 
+                      \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> Process1bLearnerLoopDone A st st2) \<or>
+        LearnerAction st st2 \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend1b A st st2) \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend2a A st st2)
+        "
+        using assms next_split by presburger
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        using assms(2) by auto
+    next
+      assume "\<exists>A. is_safe A \<and>
+                queued_msg st A = None \<and>
+                (\<exists>m\<in>set (msgs st).
+                    Process1a A m st st2)"
+      show ?thesis
+        by (metis Process1a.elims(2) Send.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1a A m st st2)\<close> assms(2) in_set_member member_rec(1))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+        by (metis Process1b.elims(2) assms(2))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+        by (metis Process1b.elims(2) assms(2))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+        by (metis Process1bLearnerLoopStep.elims(2) Send.elims(2) assms(2) in_set_member member_rec(1))
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      show ?thesis
+        using \<open>\<exists>A. is_safe A \<and> two_a_lrn_loop st A \<and> Process1bLearnerLoopDone A st st2\<close> assms(2) by force
+    next
+      assume "LearnerAction st st2"
+      then show ?thesis
+        by (metis (no_types, lifting) LearnerAction.elims(2) LearnerDecide.elims(2) LearnerRecv.elims(2) assms(2) simps(1) surjective update_convs(3) update_convs(8))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      show ?thesis
+        by (metis FakeSend1b.simps \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) in_set_member member_rec(1) simps(1) surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      then show ?thesis
+        by (metis FakeSend2a.simps assms(2) ext_inject in_set_member member_rec(1) surjective update_convs(1))
+    qed
+qed
+
+lemma spec_msgs_preserved:
+  assumes "Spec f"
+      and "x \<in> set (msgs (f i))"
+  shows "x \<in> set (msgs (f (i + 1)))"
+  by (metis Spec.elims(2) Suc_eq_plus1 assms(1) assms(2) next_msgs_preserved)
+
+lemma msgs_preserved:
+  assumes "Spec f"
+  shows "j \<ge> i \<longrightarrow> x \<in> set (msgs (f i)) \<longrightarrow> x \<in> set (msgs (f j))"
+proof (induction j)
+  case 0
+  then show ?case
+    by simp
+next
+  case (Suc j)
+  then show ?case
+    by (metis One_nat_def add.right_neutral add_Suc_right assms le_SucE spec_msgs_preserved)
+qed
+
+
 end

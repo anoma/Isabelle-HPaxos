@@ -1,5 +1,5 @@
 theory hpaxos_liveness
-imports Main hpaxos
+imports Main hpaxos hpaxos_safety
 begin
 
 fun Enabled :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> State \<Rightarrow> bool" where
@@ -521,15 +521,90 @@ proof (clarify)
   qed
 qed
 
+lemma Process1a_Enables_Action:
+  assumes "Enabled (Process1a a x) st"
+      and "is_safe a"
+      and "\<not> two_a_lrn_loop st a"
+      and "queued_msg st a = None"
+      and "x \<in> set (msgs st)"
+    shows "Enabled (AcceptorAction a) st"
+  using AcceptorAction_NotEnabled Process1a_Enabled assms(1) assms(2) assms(4) assms(5) by blast
+
+lemma no_acceptor_no_Process1a:
+  assumes "\<not> Enabled (AcceptorAction a) st"
+      and "is_safe a"
+      and "queued_msg st a = None"
+      and "x \<in> set (msgs st)"
+    shows "\<not> Enabled (Process1a a x) st"
+  using AcceptorAction_NotEnabled Process1a_Enables_Action assms(1) assms(2) assms(3) assms(4) by blast
+
+lemma Process1a_Req_known_msgs:
+  assumes "Spec f"
+      and "Process1a a x (f (i - 1)) (f i)"
+    shows "x \<in> set (known_msgs_acc (f i) a)"
+  by (metis Process1a.elims(2) Store_acc.elims(2) assms(2) in_set_member member_rec(1))
+
+lemma Process1a_Req_msgs:
+  assumes "Spec f"
+      and "is_safe a"
+      and "Process1a a x (f (i - 1)) (f i)"
+    shows "x \<in> set (msgs (f i))"
+proof -
+  have "x \<in> set (known_msgs_acc (f i) a)"
+    by (metis Process1a.elims(2) Store_acc.elims(2) assms(3) in_set_member member_rec(1))
+  have q: "(\<forall>m \<in> set (known_msgs_acc (f i) a). 
+          m \<in> set (msgs (f i)) \<and>
+          Proper_acc (f i) a m \<and>
+          WellFormed (f i) m \<and>
+          Tran m \<subseteq> set (known_msgs_acc (f i) a) \<and>
+          (\<exists>b :: Ballot. B m b)
+    )"
+    by (meson KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult assms(1) assms(2))
+  show ?thesis
+    by (simp add: \<open>x \<in> set (known_msgs_acc (f i) a)\<close> q)
+qed
+
+
 
 lemma all_message:
   assumes "Spec f"
       and "type x = T1a"
       and "\<forall>a \<in> Q. the (MaxBalO (f i) a) < bal x"
       and "\<exists>a \<in> Q. \<exists>j. i < j \<and> j < i + k \<and> Process1a a x (f (j - 1)) (f j)"
-      and "\<not> Enabled (AcceptorAction a) (f (i + k - 1))"
+      and "\<forall>a \<in> Q. \<not> Enabled (AcceptorAction a) (f (i + k - 1))"
+      and "\<forall>a \<in> Q. is_safe a"
     shows "\<forall>a \<in> Q. \<exists>j. i < j \<and> j < i + k \<and> Process1a a x (f (j - 1)) (f j)"
-  sorry
+proof -
+  have "\<forall>a \<in> Q. x \<notin> set (known_msgs_acc (f i) a)"
+    using assms(2) assms(3) new_bal_unknown by blast
+  have "\<forall>a \<in> Q. Enabled (Process1a a x) (f i)"
+    by (metis MessageType.distinct(1) MessageType.distinct(3) Process1a.simps Process1a_Enabled Proper_acc.simps Recv_acc.elims(2) Recv_acc.elims(3) WellFormed.elims(1) \<open>\<forall>a\<in>Q. x \<notin> set (known_msgs_acc (f i) a)\<close> assms(4) empty_iff ref.simps(1) type.elims)
+  have "\<exists>a \<in> Q. \<exists>j. i < j \<and> j < i + k \<and> Process1a a x (f (j - 1)) (f j)"
+    using assms(4) by blast
+  then show ?thesis
+  proof (clarify)
+    fix a0 j0 a
+    assume "a \<in> Q"
+       and "a0 \<in> Q"
+       and "i < j0"
+       and "j0 < i + k"
+       and "Process1a a0 x (f (j0 - 1)) (f j0)"
+    have "is_safe a0"
+      using \<open>a0 \<in> Q\<close> assms(6) by blast
+    have "x \<in> set (msgs (f j0))"
+      using Process1a_Req_msgs \<open>Process1a a0 x (f (j0 - 1)) (f j0)\<close> \<open>is_safe a0\<close> assms(1) by blast
+    have "x \<in> set (msgs (f (i + k - 1)))"
+      by (metis Suc_eq_plus1 \<open>j0 < i + k\<close> \<open>x \<in> set (msgs (f j0))\<close> add_le_imp_le_diff assms(1) linorder_not_less msgs_preserved not_less_eq_eq)
+    have "queued_msg (f (i + k - 1)) a = None"
+      sorry
+    have "\<not> Enabled (Process1a a x) (f (i + k - 1))"
+      using \<open>a \<in> Q\<close> \<open>queued_msg (f (i + k - 1)) a = None\<close> \<open>x \<in> set (msgs (f (i + k - 1)))\<close> assms(5) assms(6) no_acceptor_no_Process1a by blast
+    have "Enabled (Process1a a x) (f j0)"
+      sorry
+    show "\<exists>j. i < j \<and> j < i + k \<and> Process1a a x (f (j - 1)) (f j)"
+      sorry
+  qed
+qed
 
 theorem LivenessResult :
   assumes "Spec f"
