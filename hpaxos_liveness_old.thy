@@ -32,4 +32,37 @@ fun network_assumption :: "Learner \<Rightarrow> (nat \<Rightarrow> State) \<Rig
 
 
 
+
+
+
+fun BallotLimit1 :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> nat \<Rightarrow> bool" where
+  "BallotLimit1 f b i = (\<forall>m \<in> set (msgs (f i)). type m = T1a \<longrightarrow> bal m < b)"
+
+fun BallotLimit2 :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "BallotLimit2 f b = (\<forall>c :: Ballot. c > b \<longrightarrow> (\<forall>j. \<not> (Send1a c (f j) (f (1 + j)))))"
+
+fun BallotSend :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "BallotSend f b = (\<forall>i. \<exists>j \<ge> i. Send1a b (f j) (f (j + 1)))"
+
+fun EventuallyProccess1a :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> Acceptor set \<Rightarrow> bool" where
+  "EventuallyProccess1a f b Q = 
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1a a m) f))"
+
+fun EventuallyProccess1b :: "(nat \<Rightarrow> State) \<Rightarrow> Ballot \<Rightarrow> Acceptor set \<Rightarrow> bool" where
+  "EventuallyProccess1b f b Q = 
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> (\<forall>a \<in> Q. WF (Process1b a m) f))"
+
+fun EventuallyProcess1bLearnerLoop :: "(nat \<Rightarrow> State) \<Rightarrow> Acceptor set \<Rightarrow> bool" where
+  "EventuallyProcess1bLearnerLoop f Q = 
+    (\<forall>a \<in> Q. \<forall>i. \<exists>j \<ge> i. Process1bLearnerLoop a (f j) (f (j + 1)))"
+
+fun EventuallyLearnerRecv :: "(nat \<Rightarrow> State) \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "EventuallyLearnerRecv f L b = 
+    (\<forall>m :: PreMessage. B m b \<longrightarrow> WF (LearnerRecv L m) f)"
+
+fun EventuallyLearnerDecide :: "(nat \<Rightarrow> State) \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "EventuallyLearnerDecide f L b = 
+    WF (\<lambda>st st2. \<exists> v :: Value. LearnerDecide L b v st st2) f"
+
+
 end

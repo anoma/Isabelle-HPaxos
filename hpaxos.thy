@@ -239,7 +239,7 @@ fun V :: "State \<Rightarrow> PreMessage \<Rightarrow> Value \<Rightarrow> bool"
   "V st m val = (val = BVal st (Get1a m))"
 
 (*Maximal bltlot number of any messages known to acceptor a*)
-(* Direct translation *)
+(* Direct translation (not used) *)
 fun MaxBalL :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> bool" where
   "MaxBalL st a mblt = 
       ((\<exists> m \<in> set (known_msgs_acc st a). B m mblt)
