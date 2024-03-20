@@ -465,7 +465,7 @@ fun Process1a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
        then 
           Send new1b st st2
           \<and> (recent_msgs st2 = (
-              \<lambda>a2. if a2 = a then [] 
+              \<lambda>a2. if a2 = a then []
                              else recent_msgs st a2))
           \<and> (queued_msg st2 = (
               \<lambda>a2. if a2 = a then Some new1b 
