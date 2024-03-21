@@ -1928,6 +1928,20 @@ lemma spec_msgs_preserved:
   shows "x \<in> set (msgs (f (i + 1)))"
   by (metis Spec.elims(2) Suc_eq_plus1 assms(1) assms(2) next_msgs_preserved)
 
+lemma Next_Preservation:
+  assumes "Spec f"
+      and "\<forall>st st2. Next st st2 \<longrightarrow> P st \<longrightarrow> P st2"
+    shows "j \<ge> i \<longrightarrow> P (f i) \<longrightarrow> P (f j)"
+proof (induction j)
+  case 0
+  then show ?case 
+    by auto
+next
+  case (Suc j)
+  then show ?case
+    by (metis Spec.elims(2) assms(1) assms(2) le_SucE)
+qed
+
 lemma msgs_preserved:
   assumes "Spec f"
   shows "j \<ge> i \<longrightarrow> x \<in> set (msgs (f i)) \<longrightarrow> x \<in> set (msgs (f j))"
@@ -2441,17 +2455,105 @@ next
     by (metis Process1a_not_looping Spec.elims(2) assms no_queue_during_loop_Next plus_1_eq_Suc)
 qed
 
-lemma Process1bLearnerLoopDone_Always_Modifies:
-  assumes "Spec f"
-  shows "Process1bLearnerLoopDone a (f i) (f (i + 1)) \<longrightarrow> f i \<noteq> f (i + 1)"
-proof (induction i)
-  case 0
-  then show ?case
-    by (metis (no_types, lifting) Init.elims Process1bLearnerLoopDone.elims(2) Spec.elims(2) assms empty_iff ext_inject surjective)
-next
-  case (Suc i)
-  then show ?case sorry
+lemma Wellformed_Conservation_Next:
+  assumes "Next st st2"
+      and "WellFormed st m"
+    shows "WellFormed st2 m"
+proof -
+  have css: "ProposerSendAction st st2 \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                            \<and> queued_msg st A = None 
+                            \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A \<noteq> None 
+                              \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A = None 
+                              \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> Process1bLearnerLoopDone A st st2) \<or>
+                LearnerAction st st2 \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend1b A st st2) \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend2a A st st2)
+                "
+                using assms next_split by presburger
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        using assms(2) by auto
+    next
+      assume "\<exists>A. is_safe A \<and>
+                queued_msg st A = None \<and>
+                (\<exists>m\<in>set (msgs st).
+                    Process1a A m st st2)"
+      then show ?thesis
+        by (metis Process1a.elims(2) WellFormed_monotone assms(2))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+      proof -
+        show ?thesis
+          using \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> assms(2) by force
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+      proof -
+        show ?thesis
+          using \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1b A m st st2)\<close> assms(2) by fastforce
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+        by (metis Process1bLearnerLoopStep.elims(2) WellFormed_monotone assms(2))
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+        using assms(2) by auto
+    next
+      assume "LearnerAction st st2"
+      then show ?thesis
+        by (metis (no_types, lifting) LearnerAction.simps LearnerDecide.elims(2) LearnerRecv.elims(2) WellFormed_monotone assms(2) ext_inject surjective update_convs(3) update_convs(8))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      show ?thesis
+        by (metis FakeSend1b.simps WellFormed_monotone \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) ext_inject surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      then show ?thesis
+        by (metis FakeSend2a.simps WellFormed_monotone assms(2) select_convs(9) surjective update_convs(1))
+    qed
 qed
+
+lemma Wellformed_Conservation:
+  assumes "Spec f"
+      and "WellFormed (f i) m"
+    shows "j \<ge> i \<longrightarrow> WellFormed (f j) m"
+proof (induction j)
+  case 0
+  then show ?case 
+    using assms(2) by blast
+next
+  case (Suc j)
+  then show ?case
+    by (metis Spec.elims(2) Wellformed_Conservation_Next assms(1) assms(2) le_SucE)
+qed
+  
 
 
 
