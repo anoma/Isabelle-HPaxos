@@ -663,12 +663,15 @@ fun LearnerDecide :: "Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightar
               else decision st x y \<rparr>
   )"
 
-fun LearnerAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
-  "LearnerAction st st2 = (
-    \<exists>ln :: Learner.
+
+fun LearnerAction :: "Learner \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "LearnerAction ln st st2 = (
       (\<exists>m \<in> set (msgs st). LearnerRecv ln m st st2) \<or>
       (\<exists>blt :: Ballot. \<exists>val :: Value. LearnerDecide ln blt val st st2)
   )"
+
+fun LearnerProcessAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
+  "LearnerProcessAction st st2 = (\<exists>ln :: Learner. LearnerAction ln st st2)"
 
 fun FakeAcceptorAction :: "State \<Rightarrow> State \<Rightarrow> bool" where
   "FakeAcceptorAction st st2 = (
@@ -681,7 +684,7 @@ fun Next :: "State \<Rightarrow> State \<Rightarrow> bool" where
   "Next st st2 = (
        ProposerSendAction st st2
      \<or> AcceptorProcessAction st st2
-     \<or> LearnerAction st st2
+     \<or> LearnerProcessAction st st2
      \<or> FakeAcceptorAction st st2
   )"
 

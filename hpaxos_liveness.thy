@@ -260,12 +260,6 @@ lemma Process2a_Enabled:
   shows "Enabled (Process2a a m) st = (type m = T2a \<and> Recv_acc st a m)"
   by (metis (no_types, lifting) Enabled.simps Process2a.simps Process2aAlt)
 
-fun Acceptor_Enabled :: "Acceptor \<Rightarrow> State \<Rightarrow> bool" where
-  "Acceptor_Enabled a st = (
-    (\<exists>m. Recv_acc st a m) \<or> (\<exists>ln :: Learner. ln \<notin> processed_lrns st a)
-  )"
-
-
 lemma Process1bLearnerLoopStepAlt1:
   assumes "WellFormed st (M2a ln a (recent_msgs st a))"
   shows "Process1bLearnerLoopStep a ln st (
@@ -391,6 +385,17 @@ lemma AcceptorAction_NotEnabled:
   )"
   by (metis AcceptorAction_Enabled assms)
 
+
+lemma AcceptorAction_NotEnabled_Spec:
+  assumes "Spec f"
+      and "is_safe a"
+  shows "\<not> Enabled (AcceptorAction a) (f i) = (
+     (queued_msg (f i) a = None)
+     \<and> \<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b))
+     \<and> \<not> two_a_lrn_loop (f i) a
+  )"
+  by (metis AcceptorAction_NotEnabled QueuedMsgResult QueuedMsgSpec1.elims(2) QueuedMsgSpec2.elims(2) QueuedMsgSpec2_Conserved assms(1) assms(2))
+
 lemma LearnerRecv_Enabled:
   shows "Enabled (LearnerRecv l m) st = Recv_lrn st l m"
   using Enabled.simps LearnerRecv.simps by presburger
@@ -399,67 +404,19 @@ lemma LearnerDecide_Enabled:
   shows "Enabled (LearnerDecide l b v) st = ChosenIn st l b v"
   using Enabled.simps LearnerDecide.simps by presburger
 
+lemma LearnerAction_Enabled:
+  shows "Enabled (LearnerAction l) st = (
+      (\<exists>m\<in>set (msgs st). Recv_lrn st l m) \<or> 
+      (\<exists>b v. ChosenIn st l b v))"
+  by (metis Enabled.simps LearnerAction.elims(2) LearnerAction.elims(3) LearnerDecide_Enabled LearnerRecv_Enabled)
+
+
+
 (*Weak fairness*)
 fun WF :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
   "WF p f = (
     \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (j + 1)))
   )"
-
-(*Extract consecutive runs of given lengths from a stream*)
-fun sequence_of_runs :: "nat \<Rightarrow> nat list \<Rightarrow> (nat \<Rightarrow> 'a) \<Rightarrow> ('a list) list" where
-  "sequence_of_runs start [] f = []" |
-  "sequence_of_runs start (len # lens) f = 
-    map f [start ..< start + len] # sequence_of_runs (start + len) lens f"
-
-theorem sequence_of_runs_length:
-  shows "length (sequence_of_runs start lens f) = length lens"
-proof (induction lens arbitrary: start; simp) qed
-
-definition message_delivered :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "message_delivered Q f ib ie \<equiv> 
-    (\<exists>x :: PreMessage. 
-     (type x = T1a) \<and>
-     (\<forall>a \<in> Q. the (MaxBalO (f ib) a) < bal x) \<and>
-     (\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a x (f (j - 1)) (f j)))"
-(*? (\<forall> a \<in> Q. \<forall>mb b :: Ballot. MaxBal (f ib) a b \<and> B x b \<longrightarrow> mb \<le> b) ?*)
-
-
-definition message_unique :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "message_unique Q f ib ie \<equiv> 
-    (\<forall>m1 m2 :: PreMessage. 
-          ((\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a m1 (f (j - 1)) (f j)) \<and>
-           (\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a m2 (f (j - 1)) (f j))) \<longrightarrow>
-           m1 = m2)"
-
-definition no_message_delivered :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "no_message_delivered Q f ib ie \<equiv> \<not> (\<exists>m :: PreMessage. (\<exists>a j. ib < j \<and> j < ie \<and> Process1a a m (f (j - 1)) (f j)))"
-
-fun Network_Assumption :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
-  "Network_Assumption Q f = (
-    \<exists>is :: nat list. length is = 14 \<and> sorted is \<and>
-    (\<forall>i \<in> set (drop 1 is). \<forall>a \<in> Q. \<not>Enabled (AcceptorAction a) (f (i - 1))) \<and>
-
-    message_delivered Q f (is ! 0) (is ! 1) \<and> message_unique Q f (is ! 0) (is ! 1) \<and>
-    no_message_delivered Q f (is ! 1) (is ! 2) \<and>
-    no_message_delivered Q f (is ! 2) (is ! 3) \<and>
-    message_delivered Q f (is ! 4) (is ! 5) \<and> message_unique Q f (is ! 4) (is ! 5) \<and>
-    no_message_delivered Q f (is ! 5) (is ! 6) \<and>
-    no_message_delivered Q f (is ! 6) (is ! 7) \<and>
-    no_message_delivered Q f (is ! 7) (is ! 8) \<and>
-    no_message_delivered Q f (is ! 8) (is ! 9) \<and>
-    message_delivered Q f (is ! 9) (is ! 10) \<and> message_unique Q f (is ! 9) (is ! 10) \<and>
-    no_message_delivered Q f (is ! 10) (is ! 11) \<and>
-    no_message_delivered Q f (is ! 11) (is ! 12) \<and>
-    no_message_delivered Q f (is ! 12) (is ! 13)
-  )"
-
-fun Liveness :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
-  "Liveness f = (
-    \<forall> L :: Learner. \<forall> b :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
-    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
-    (\<forall>i. Network_Assumption Q f \<longrightarrow> 
-    (\<exists>j \<ge> i. \<exists> BB :: Ballot . decision (f j) L BB \<noteq> {})
-  ))"
 
 lemma ballot_present:
   shows "M1a b \<in> set l \<longrightarrow> b \<in> (Get1a ` set l)"
@@ -693,14 +650,14 @@ proof -
 qed
 
 lemma LearnerAction_Preserves_AcceptorAction:
-  assumes "LearnerAction st st2"
+  assumes "LearnerProcessAction st st2"
       and "Enabled (AcceptorAction a) st"
     shows "Enabled (AcceptorAction a) st2"
 proof -
-  have "LearnerAction st st2"
+  have "LearnerProcessAction st st2"
     using assms(1) by blast
   then show ?thesis
-    unfolding LearnerAction.simps
+    unfolding LearnerProcessAction.simps LearnerAction.simps
   proof (clarify)
     fix ln
     have "is_safe a"
@@ -972,39 +929,9 @@ Process1bLearnerLoopStep will maintain AcceptorAction since it doesn't disable t
   (Note: Proven)
 
 Process1bLearnerLoopDone may disable AcceptorAction if there are no messages left to proccess.
-
+  (Note: Proven)
 
 *)
-
-
-
-
-(*
-(queued_msg st a = None \<or> 
-        type (the (queued_msg st a)) \<noteq> T1b \<or> 
-        \<not> Recv_acc st a (the (queued_msg st a))) \<and> 
-     (queued_msg st a \<noteq> None \<or> (
-         \<forall>m \<in> set (msgs st). \<not> Recv_acc st a m \<or> (type m \<noteq> T1a \<and> type m \<noteq> T1b)
-     ))
-*)
-
-(*
-  proof (cases "queued_msg (f i) a = None")
-    case True
-    have "\<exists>m \<in> set (msgs st). Process1b a m st st2"
-      using AcceptorAction.simps Process1b_Not_Process1a True \<open>\<not> two_a_lrn_loop st a\<close> assms(2) qa st2_def st_def by blast
-    then show ?thesis sorry
-  next
-    case False
-    have "Process1b a (the (queued_msg st a)) st st2"
-      by (metis AcceptorAction.elims(2) False \<open>\<not> two_a_lrn_loop st a\<close> qa st_def)
-    have "type (the (queued_msg st2 a)) \<noteq> T1b \<or> 
-        \<not> Recv_acc st2 a (the (queued_msg st2 a))"
-      sorry
-    then show ?thesis sorry
-  qed
-*)
-
 
 (*
 Note: 
@@ -1242,65 +1169,6 @@ proof -
   qed
 qed
 
-lemma AcceptorAction_Disabled_When_No_Messages:
-  assumes "Spec f"
-      and "Enabled (AcceptorAction a) (f i)"
-      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "\<not> (\<exists>m \<in> set (msgs (f (i + 1))). Recv_acc (f (i + 1)) a m \<and> (type m = T1a \<or> type m = T1b))"
-proof -
-  have "(\<exists>m. Process1a a m (f i) (f (1 + i)) 
-              \<and> \<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a)) 
-              \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
-        (\<exists>m. Process1b a m (f i) (f (1 + i)) 
-              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)
-              \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
-        (Process1bLearnerLoopDone a (f i) (f (1 + i)) 
-              \<and> \<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b)))"
-    using Preserves_AcceptorAction_Disabled_Three_Cases assms(1) assms(2) assms(3) by presburger
-  then show ?thesis
-  proof (elim disjE; clarify)
-    fix m m2
-    assume "Process1a a m (f i) (f (1 + i))"
-       and "\<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a))"
-       and "\<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-       and "m2 \<in> set (msgs (f (i + 1)))"
-       and "Recv_acc (f (i + 1)) a m2"
-       and "type m2 = T1a \<or> type m2 = T1b"
-    have "m2 \<noteq> m"
-      by (metis Process1a.elims(2) Recv_acc.elims(2) Store_acc.elims(2) \<open>Process1a a m (f i) (f (1 + i))\<close> \<open>Recv_acc (f (i + 1)) a m2\<close> add.commute list.set_intros(1))
-    have "m2 \<in> set (msgs (f i))"
-      by (metis Process1a.elims(2) \<open>Process1a a m (f i) (f (1 + i))\<close> \<open>\<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a))\<close> \<open>m2 \<in> set (msgs (f (i + 1)))\<close> add.commute)
-    show False
-      by (metis (no_types, opaque_lifting) AcceptorAction_Enabled AcceptorAction_NotEnabled MessageType.distinct(1) Process1a.simps QueuedMsgResult QueuedMsgSpec1.elims(2) \<open>Process1a a m (f i) (f (1 + i))\<close> \<open>Recv_acc (f (i + 1)) a m2\<close> \<open>\<not> (\<exists>m2\<in>set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))\<close> \<open>\<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a))\<close> \<open>m2 \<in> set (msgs (f (i + 1)))\<close> \<open>type m2 = T1a \<or> type m2 = T1b\<close> add.commute assms(1) assms(2) assms(3))
-  next
-    fix m m2
-    assume "Process1b a m (f i) (f (1 + i))"
-       and "\<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-       and "m2 \<in> set (msgs (f (i + 1)))"
-       and "Recv_acc (f (i + 1)) a m2"
-       and "type m2 = T1a \<or> type m2 = T1b"
-    have "m2 \<noteq> m"
-      by (metis Process1b.elims(2) Recv_acc.elims(2) Store_acc.elims(2) \<open>Process1b a m (f i) (f (1 + i))\<close> \<open>Recv_acc (f (i + 1)) a m2\<close> add.commute list.set_intros(1))
-    have "m2 \<in> set (msgs (f i))"
-      by (metis Process1b.elims(2) \<open>Process1b a m (f i) (f (1 + i))\<close> \<open>m2 \<in> set (msgs (f (i + 1)))\<close> add.commute)
-    show False
-      by (metis (full_types) AcceptorAction_Enabled Process1b.elims(2) Suc_eq_plus1 \<open>Process1b a m (f i) (f (1 + i))\<close> \<open>Recv_acc (f (i + 1)) a m2\<close> \<open>m2 \<in> set (msgs (f (i + 1)))\<close> \<open>type m2 = T1a \<or> type m2 = T1b\<close> assms(2) assms(3) plus_1_eq_Suc)
-  next
-    fix m m2
-    assume "Process1bLearnerLoopDone a (f i) (f (1 + i))"
-       and "\<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b))"
-       and "m2 \<in> set (msgs (f (i + 1)))"
-       and "Recv_acc (f (i + 1)) a m2"
-       and "type m2 = T1a \<or> type m2 = T1b"
-    have "m2 \<in> set (msgs (f i))"
-      using \<open>Process1bLearnerLoopDone a (f i) (f (1 + i))\<close> \<open>m2 \<in> set (msgs (f (i + 1)))\<close> by force
-    have "Recv_acc (f i) a m2"
-      using \<open>Process1bLearnerLoopDone a (f i) (f (1 + i))\<close> \<open>Recv_acc (f (i + 1)) a m2\<close> by auto
-    show False
-      using \<open>Recv_acc (f i) a m2\<close> \<open>\<not> (\<exists>m\<in>set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b))\<close> \<open>m2 \<in> set (msgs (f i))\<close> \<open>type m2 = T1a \<or> type m2 = T1b\<close> by blast
-  qed
-qed
-
 
 lemma all_message:
   assumes "Spec f"
@@ -1341,6 +1209,66 @@ proof -
       sorry
   qed
 qed
+
+
+
+
+
+(*Extract consecutive runs of given lengths from a stream*)
+fun sequence_of_runs :: "nat \<Rightarrow> nat list \<Rightarrow> (nat \<Rightarrow> 'a) \<Rightarrow> ('a list) list" where
+  "sequence_of_runs start [] f = []" |
+  "sequence_of_runs start (len # lens) f = 
+    map f [start ..< start + len] # sequence_of_runs (start + len) lens f"
+
+theorem sequence_of_runs_length:
+  shows "length (sequence_of_runs start lens f) = length lens"
+proof (induction lens arbitrary: start; simp) qed
+
+definition message_delivered :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
+  "message_delivered Q f ib ie \<equiv> 
+    (\<exists>x :: PreMessage. 
+     (type x = T1a) \<and>
+     (\<forall>a \<in> Q. the (MaxBalO (f ib) a) < bal x) \<and>
+     (\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a x (f (j - 1)) (f j)))"
+(*? (\<forall> a \<in> Q. \<forall>mb b :: Ballot. MaxBal (f ib) a b \<and> B x b \<longrightarrow> mb \<le> b) ?*)
+
+
+definition message_unique :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
+  "message_unique Q f ib ie \<equiv> 
+    (\<forall>m1 m2 :: PreMessage. 
+          ((\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a m1 (f (j - 1)) (f j)) \<and>
+           (\<exists>a \<in> Q. \<exists>j. ib < j \<and> j < ie \<and> Process1a a m2 (f (j - 1)) (f j))) \<longrightarrow>
+           m1 = m2)"
+
+definition no_message_delivered :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
+  "no_message_delivered Q f ib ie \<equiv> \<not> (\<exists>m :: PreMessage. (\<exists>a j. ib < j \<and> j < ie \<and> Process1a a m (f (j - 1)) (f j)))"
+
+fun Network_Assumption :: "Acceptor set \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Network_Assumption Q f = (
+    \<exists>is :: nat list. length is = 14 \<and> sorted is \<and>
+    (\<forall>i \<in> set (drop 1 is). \<forall>a \<in> Q. \<not>Enabled (AcceptorAction a) (f (i - 1))) \<and>
+
+    message_delivered Q f (is ! 0) (is ! 1) \<and> message_unique Q f (is ! 0) (is ! 1) \<and>
+    no_message_delivered Q f (is ! 1) (is ! 2) \<and>
+    no_message_delivered Q f (is ! 2) (is ! 3) \<and>
+    message_delivered Q f (is ! 4) (is ! 5) \<and> message_unique Q f (is ! 4) (is ! 5) \<and>
+    no_message_delivered Q f (is ! 5) (is ! 6) \<and>
+    no_message_delivered Q f (is ! 6) (is ! 7) \<and>
+    no_message_delivered Q f (is ! 7) (is ! 8) \<and>
+    no_message_delivered Q f (is ! 8) (is ! 9) \<and>
+    message_delivered Q f (is ! 9) (is ! 10) \<and> message_unique Q f (is ! 9) (is ! 10) \<and>
+    no_message_delivered Q f (is ! 10) (is ! 11) \<and>
+    no_message_delivered Q f (is ! 11) (is ! 12) \<and>
+    no_message_delivered Q f (is ! 12) (is ! 13)
+  )"
+
+fun Liveness :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Liveness f = (
+    \<forall> L :: Learner. \<forall> b :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
+    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
+    (\<forall>i. Network_Assumption Q f \<longrightarrow> 
+    (\<exists>j \<ge> i. \<exists> BB :: Ballot . decision (f j) L BB \<noteq> {})
+  ))"
 
 
 theorem LivenessResult :
