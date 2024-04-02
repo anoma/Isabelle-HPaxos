@@ -5,6 +5,10 @@ begin
 fun Enabled :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> State \<Rightarrow> bool" where
   "Enabled r st = (\<exists>st2. r st st2)"
 
+lemma Exists_Enabled_Swap:
+  shows "Enabled (\<lambda>st st2. \<exists>v. R v st st2) s = (\<exists>v. Enabled (R v) s)"  
+  by auto
+
 (* Send1a is always enabled.*)
 lemma Send1a_Enabled:
   shows "Enabled (Send1a b) st = True"
@@ -415,7 +419,7 @@ lemma LearnerAction_Enabled:
 (*Weak fairness*)
 fun WF :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
   "WF p f = (
-    \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (j + 1)))
+    \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (1 + j)))
   )"
 
 lemma ballot_present:
@@ -1169,6 +1173,77 @@ proof -
   qed
 qed
 
+lemma LearnerDecide_Enables_Perminent_Next:
+  assumes "Spec f"
+      and "Enabled (LearnerDecide L BB v) (f i)"
+    shows "j \<ge> i \<longrightarrow> Enabled (LearnerDecide L BB v) (f j)"
+  using Choice_Made_Perminent LearnerDecide_Enabled assms(1) assms(2) by blast
+
+
+fun Network_Assumption_0 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Network_Assumption_0 Q L BB f = (
+    (\<exists>i v. ChosenIn (f i) L BB v) \<and>
+    (WF (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) f)
+  )"
+
+fun Liveness_0 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Liveness_0 f = (
+    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
+    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
+    (Network_Assumption_0 Q L BB f \<longrightarrow> 
+    (\<exists>j. decision (f j) L BB \<noteq> {})
+  ))"
+
+
+theorem LivenessResult :
+  assumes "Spec f"
+  shows "Liveness_0 f"
+  unfolding Liveness_0.simps Network_Assumption_0.simps WF.simps
+proof (clarify)
+  fix L BB Q j v
+  assume "is_quorum Q"
+     and "Ball Q is_safe"
+     and "TrustLive L Q"
+     and h: "\<forall>i. (\<forall>j\<ge>i. Enabled (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) (f j)) \<longrightarrow>
+             (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+     and cha: "ChosenIn (f j) L BB v"
+  have h0: "\<forall>i. (\<forall>j\<ge>i. (\<exists>v. ChosenIn (f j) L BB v)) \<longrightarrow>
+            (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+    using h by auto
+  have "(\<forall>k\<ge>j. (\<exists>v. ChosenIn (f k) L BB v))"
+    using Choice_Made_Perminent cha assms by blast
+  then have "(\<exists>k\<ge>j. \<exists>v. LearnerDecide L BB v (f k) (f (1 + k)))"
+    using h0 by blast
+  then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+  proof (clarify)
+    fix k v2
+    assume "j \<le> k"
+       and "LearnerDecide L BB v2 (f k) (f (1 + k))"
+    then have "v2 \<in> decision (f (1 + k)) L BB"
+      by force
+    then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+      by blast
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 lemma all_message:
   assumes "Spec f"
@@ -1209,6 +1284,8 @@ proof -
       sorry
   qed
 qed
+
+
 
 
 
