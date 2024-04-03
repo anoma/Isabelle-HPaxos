@@ -1,426 +1,389 @@
 theory hpaxos_liveness
-imports Main hpaxos hpaxos_safety
+imports Main hpaxos hpaxos_safety hpaxos_aux
 begin
 
-fun Enabled :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> State \<Rightarrow> bool" where
-  "Enabled r st = (\<exists>st2. r st st2)"
 
-lemma Exists_Enabled_Swap:
-  shows "Enabled (\<lambda>st st2. \<exists>v. R v st st2) s = (\<exists>v. Enabled (R v) s)"  
-  by auto
 
-(* Send1a is always enabled.*)
-lemma Send1a_Enabled:
-  shows "Enabled (Send1a b) st = True"
-  by fastforce
 
-lemma Process1aAlt1:
-  assumes "WellFormed st (M1b a (m # recent_msgs st a))"
-      and "type m = T1a"
-      and "Recv_acc st a m"
-    shows "Process1a a m st (st\<lparr>msgs := M1b a (m # recent_msgs st a) # msgs st, 
-                                recent_msgs := (
-                                  \<lambda>a2. if a2 = a then [] 
-                                                 else recent_msgs st a2),
-                                queued_msg := (
-                                  \<lambda>a2. if a2 = a then Some (M1b a (m # recent_msgs st a)) 
-                                                 else queued_msg st a2),
-                                known_msgs_acc := (
-                                  \<lambda>x. if a = x 
-                                      then m # known_msgs_acc st x
-                                      else known_msgs_acc st x) \<rparr>)"
+
+
+
+
+lemma Process1b_Not_Process1bLearnerLoopStep:
+  assumes "Process1b a ln st st2"
+  shows "\<not> Process1bLearnerLoopStep a2 ln2 st st2"
+  by (smt (z3) Process1b.elims(1) Process1bLearnerLoopStep.elims(1) Send.elims(1) assms not_Cons_self)
+
+lemma Process1b_Not_Process1a:
+  assumes "Process1b a ln st st2"
+  shows "\<not> Process1a a2 ln2 st st2"
+  by (smt (z3) MessageType.simps(2) Process1a.simps Process1b.elims(1) assms list.distinct(1) list.inject not_Cons_self)
+
+lemma Process1a_Not_Process1bLearnerLoopDone:
+  assumes "Process1a a ln st st2"
+  shows "\<not> Process1bLearnerLoopDone a2 st st2"
+  by (smt (verit, best) Process1a.elims(2) Process1bLearnerLoopDone.elims(1) Send.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(6))
+
+lemma Process1b_Not_Process1bLearnerLoopDone:
+  assumes "Process1b a ln st st2"
+  shows "\<not> Process1bLearnerLoopDone a2 st st2"
+  by (metis (mono_tags, lifting) Process1b.elims(2) Process1bLearnerLoopDone.elims(2) Store_acc.simps assms not_Cons_self select_convs(2) surjective update_convs(6))
+
+
+lemma Process1a_Not_ProposerSendAction :
+  assumes "Process1a a m st st2"
+    shows "\<not> ProposerSendAction st st2"
+  by (metis (no_types, lifting) Process1a.elims(2) ProposerSendAction.elims(2) Send1a.elims(2) Store_acc.elims(2) assms not_Cons_self2 select_convs(2) surjective update_convs(1))
+
+lemma Process1a_Not_LearnerProcessAction :
+  assumes "Process1a a m st st2"
+    shows "\<not> LearnerProcessAction st st2"
+  by (smt (verit) LearnerProcessAction.elims LearnerAction.elims(2) LearnerDecide.elims(2) LearnerRecv.elims(2) Process1a.elims(2) Send.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(3) update_convs(8))
+
+lemma Process1a_Not_FakeAcceptorAction :
+  assumes "Process1a a m st st2"
+    shows "\<not> FakeAcceptorAction st st2"
+  by (metis FakeAcceptorAction.simps FakeSend1b.elims(1) FakeSend2a.simps Process1a.elims(2) Store_acc.elims(2) assms not_Cons_self2 select_convs(2) surjective update_convs(1))
+
+lemma Process1a_Next_Implies_AcceptorAction:
+  assumes "Next st st2"
+      and "Process1a a m st st2"
+    shows "AcceptorAction a st st2"
 proof -
-  define st2 where "st2 = (st\<lparr>msgs := M1b a (m # recent_msgs st a) # msgs st, 
-                              recent_msgs := (
-                                \<lambda>a2. if a2 = a then [] 
-                                               else recent_msgs st a2),
-                              queued_msg := (
-                                \<lambda>a2. if a2 = a then Some (M1b a (m # recent_msgs st a)) 
-                                               else queued_msg st a2),
-                              known_msgs_acc := (
-                                \<lambda>x. if a = x 
-                                    then m # known_msgs_acc st x
-                                    else known_msgs_acc st x) \<rparr>)"
-  
-  have "Store_acc a m st st2" 
-    by (simp add: st2_def)
-  have "Send (M1b a (m # recent_msgs st a)) st st2
-          \<and> (recent_msgs st2 = (
-              \<lambda>a2. if a2 = a then [] 
-                             else recent_msgs st a2))
-          \<and> (queued_msg st2 = (
-              \<lambda>a2. if a2 = a then Some (M1b a (m # recent_msgs st a)) 
-                             else queued_msg st a2))"
-    by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1a.simps
-    by (smt (verit, ccfv_SIG) \<open>Send (M1b a (m # recent_msgs st a)) st st2 \<and> recent_msgs st2 = (\<lambda>a2. if a2 = a then [] else recent_msgs st a2) \<and> queued_msg st2 = (\<lambda>a2. if a2 = a then Some (M1b a (m # recent_msgs st a)) else queued_msg st a2)\<close> \<open>Store_acc a m st st2\<close> assms(1) assms(2) assms(3) ext_inject st2_def surjective update_convs(1) update_convs(2) update_convs(4) update_convs(5))
+  have "AcceptorProcessAction st st2"
+    using Next.simps Process1a_Not_FakeAcceptorAction Process1a_Not_LearnerProcessAction Process1a_Not_ProposerSendAction assms(1) assms(2) by blast
+  then show ?thesis
+    unfolding AcceptorProcessAction.simps
+  proof (elim exE)
+    fix a2
+    assume "AcceptorAction a2 st st2"
+    have "\<exists>m \<in> set (msgs st). Process1a a2 m st st2 \<or> Process1b a2 m st st2"
+      by (metis AcceptorAction.simps Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(1) Process1b_Not_Process1a \<open>AcceptorAction a2 st st2\<close> assms(2))
+    have "Process1a a2 m st st2"
+      by (metis Process1a.elims(2) Process1b_Not_Process1a Store_acc.elims(2) \<open>\<exists>m\<in>set (msgs st). Process1a a2 m st st2 \<or> Process1b a2 m st st2\<close> assms(2) not_Cons_self2)
+    have "a = a2"
+      by (metis Process1a.simps Store_acc.elims(2) \<open>Process1a a2 m st st2\<close> assms(2) not_Cons_self)
+    then show ?thesis
+      using \<open>AcceptorAction a2 st st2\<close> by blast
+  qed
 qed
 
-lemma Process1aAlt2:
-  assumes "\<not> WellFormed st (M1b a (m # recent_msgs st a))"
-      and "type m = T1a"
-      and "Recv_acc st a m"
-    shows "Process1a a m st (st\<lparr>recent_msgs := (
-                              \<lambda>a2. if a2 = a then m # recent_msgs st a2 
-                                             else recent_msgs st a2),
-                            known_msgs_acc := (
-                                \<lambda>x. if a = x 
-                                    then m # known_msgs_acc st x
-                                    else known_msgs_acc st x)\<rparr>)"
+
+
+
+
+lemma Process1B_Not_ProposerSendAction :
+  assumes "Process1b a m st st2"
+    shows "\<not> ProposerSendAction st st2"
 proof -
-  define st2 where "st2 = (st\<lparr>recent_msgs := (
-                              \<lambda>a2. if a2 = a then m # recent_msgs st a2 
-                                             else recent_msgs st a2),
-                            known_msgs_acc := (
-                                \<lambda>x. if a = x 
-                                    then m # known_msgs_acc st x
-                                    else known_msgs_acc st x)\<rparr>)"
-  
-  have "Store_acc a m st st2" 
-    by (simp add: st2_def)
-  have "(recent_msgs st2 = (
-              \<lambda>a2. if a2 = a then m # recent_msgs st a2 
-                             else recent_msgs st a2))
-          \<and> (msgs st = msgs st2)
-          \<and> (queued_msg st = queued_msg st2)"
-    by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1a.simps
-    using assms(1) assms(2) assms(3) by auto
+  have "recent_msgs st2 a \<noteq> recent_msgs st a"
+    using assms by auto
+  then show ?thesis
+    by force
 qed
 
-lemma Process1a_Enabled:
-  shows "Enabled (Process1a a m) st = (type m = T1a \<and> Recv_acc st a m)"
-  by (metis (no_types, lifting) Enabled.simps Process1a.simps Process1aAlt1 Process1aAlt2)
-
-lemma Process1a_Trans:
-  assumes "m \<notin> set (known_msgs_acc st a2)"
-      and "Enabled (Process1a a1 m) st"
-    shows "Enabled (Process1a a2 m) st"
-  by (metis MessageType.distinct(1) MessageType.distinct(3) Process1a_Enabled Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) assms(1) assms(2) empty_iff ref.simps(1) type.elims)
-
-lemma Process1bAlt1:
-  assumes "\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b"
-      and "type m = T1b"
-      and "Recv_acc st a m"
-    shows "Process1b a m st (st\<lparr>recent_msgs := (
-                                      \<lambda>x. if x = a 
-                                          then m # recent_msgs st x
-                                          else recent_msgs st x ),
-                                known_msgs_acc := (
-                                  \<lambda>x. if a = x 
-                                      then m # known_msgs_acc st x
-                                      else known_msgs_acc st x),
-                                two_a_lrn_loop := (\<lambda>x.
-                                    if x = a
-                                    then True
-                                    else two_a_lrn_loop st x),
-                                 processed_lrns := (\<lambda>x.
-                                      if x = a
-                                      then {}
-                                      else processed_lrns st x),
-                                queued_msg := (\<lambda>x.
-                                      if x = a
-                                      then None
-                                      else queued_msg st x) \<rparr>)"
+lemma Process1b_Not_LearnerProcessAction :
+  assumes "Process1b a m st st2"
+    shows "\<not> LearnerProcessAction st st2"
 proof -
-  define st2 where "st2 = st\<lparr>recent_msgs := (
-                                      \<lambda>x. if x = a 
-                                          then m # recent_msgs st x
-                                          else recent_msgs st x ),
-                            known_msgs_acc := (
-                              \<lambda>x. if a = x 
-                                  then m # known_msgs_acc st x
-                                  else known_msgs_acc st x),
-                            two_a_lrn_loop := (\<lambda>x.
-                                if x = a
-                                then True
-                                else two_a_lrn_loop st x),
-                             processed_lrns := (\<lambda>x.
-                                  if x = a
-                                  then {}
-                                  else processed_lrns st x),
-                            queued_msg := (\<lambda>x.
-                                  if x = a
-                                  then None
-                                  else queued_msg st x) \<rparr>"
-  have "recent_msgs st2 = (
-        \<lambda>x. if x = a 
-            then m # recent_msgs st x
-            else recent_msgs st x )" by (simp add: st2_def)
-  have "queued_msg st2 = (\<lambda>x.
-          if x = a
-          then None
-          else queued_msg st x)" by (simp add: st2_def)
-  have "Store_acc a m st st2" by (simp add: st2_def)
-  have "two_a_lrn_loop st2 = (\<lambda>x.
-          if x = a
-          then True
-          else two_a_lrn_loop st x)
-        \<and> processed_lrns st2 = (\<lambda>x.
-          if x = a
-          then {}
-          else processed_lrns st x)" by (simp add: st2_def)
-  have "(msgs st2 = msgs st)
-    \<and> (decision st2 = decision st)
-    \<and> (BVal st2 = BVal st)" by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1b.simps
-    using \<open>Store_acc a m st st2\<close> \<open>msgs st2 = msgs st \<and> decision st2 = decision st \<and> BVal st2 = BVal st\<close> \<open>queued_msg st2 = (\<lambda>x. if x = a then None else queued_msg st x)\<close> \<open>recent_msgs st2 = (\<lambda>x. if x = a then m # recent_msgs st x else recent_msgs st x)\<close> \<open>two_a_lrn_loop st2 = (\<lambda>x. if x = a then True else two_a_lrn_loop st x) \<and> processed_lrns st2 = (\<lambda>x. if x = a then {} else processed_lrns st x)\<close> assms(1) assms(2) assms(3) st2_def by fastforce
+  have "recent_msgs st2 a \<noteq> recent_msgs st a"
+    using assms by auto
+  then show ?thesis
+    by force
 qed
 
-lemma Process1bAlt2:
-  assumes "\<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)"
-      and "type m = T1b"
-      and "Recv_acc st a m"
-    shows "Process1b a m st (st\<lparr>recent_msgs := (
-                                      \<lambda>x. if x = a 
-                                          then m # recent_msgs st x
-                                          else recent_msgs st x ),
-                                known_msgs_acc := (
-                                  \<lambda>x. if a = x 
-                                      then m # known_msgs_acc st x
-                                      else known_msgs_acc st x),
-                                queued_msg := (\<lambda>x.
-                                      if x = a
-                                      then None
-                                      else queued_msg st x) \<rparr>)"
+lemma Process1b_Not_FakeSend1b :
+  assumes "Process1b a m st st2"
+    shows "\<not> FakeSend1b a2 st st2"
+  by (smt (z3) FakeSend1b.elims(1) Process1b.elims(1) assms not_Cons_self select_convs(4) surjective update_convs(1))
+
+lemma Process1b_Not_FakeSend2a :
+  assumes "Process1b a m st st2"
+    shows "\<not> FakeSend2a a2 st st2"
 proof -
-  define st2 where "st2 = st\<lparr>recent_msgs := (
-                                      \<lambda>x. if x = a 
-                                          then m # recent_msgs st x
-                                          else recent_msgs st x ),
-                            known_msgs_acc := (
-                              \<lambda>x. if a = x 
-                                  then m # known_msgs_acc st x
-                                  else known_msgs_acc st x),
-                            queued_msg := (\<lambda>x.
-                                  if x = a
-                                  then None
-                                  else queued_msg st x) \<rparr>"
-  have "recent_msgs st2 = (
-        \<lambda>x. if x = a 
-            then m # recent_msgs st x
-            else recent_msgs st x )" by (simp add: st2_def)
-  have "queued_msg st2 = (\<lambda>x.
-          if x = a
-          then None
-          else queued_msg st x)" by (simp add: st2_def)
-  have "Store_acc a m st st2" by (simp add: st2_def)
-  have "two_a_lrn_loop st2 = two_a_lrn_loop st
-        \<and> processed_lrns st2 = processed_lrns st" by (simp add: st2_def)
-  have "(msgs st2 = msgs st)
-    \<and> (decision st2 = decision st)
-    \<and> (BVal st2 = BVal st)" by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1b.simps
-    using \<open>Store_acc a m st st2\<close> \<open>msgs st2 = msgs st \<and> decision st2 = decision st \<and> BVal st2 = BVal st\<close> \<open>queued_msg st2 = (\<lambda>x. if x = a then None else queued_msg st x)\<close> \<open>recent_msgs st2 = (\<lambda>x. if x = a then m # recent_msgs st x else recent_msgs st x)\<close> \<open>two_a_lrn_loop st2 = two_a_lrn_loop st \<and> processed_lrns st2 = processed_lrns st\<close> assms(1) assms(2) assms(3) st2_def by blast
+  have "recent_msgs st2 a \<noteq> recent_msgs st a"
+    using assms by auto
+  then show ?thesis
+    by (metis FakeSend2a.simps select_convs(4) surjective update_convs(1))
 qed
 
-lemma Process1b_Enabled:
-  shows "Enabled (Process1b a m) st = (type m = T1b \<and> Recv_acc st a m)"
-  by (smt (verit, best) Enabled.simps Process1b.simps Process1bAlt1 Process1bAlt2)
+lemma Process1b_Not_FakeAcceptorAction :
+  assumes "Process1b a m st st2"
+    shows "\<not> FakeAcceptorAction st st2"
+  using FakeAcceptorAction.simps Process1b_Not_FakeSend1b Process1b_Not_FakeSend2a assms by presburger
 
-lemma Process2aAlt:
-  assumes "type m = T2a"
-      and "Recv_acc st a m"
-    shows "Process2a a m st (st\<lparr>recent_msgs := (
-                                  \<lambda>x. if x = a 
-                                      then m # recent_msgs st x
-                                      else recent_msgs st x ),
-                                known_msgs_acc := (
-                                      \<lambda>x. if a = x 
-                                          then m # known_msgs_acc st x
-                                          else known_msgs_acc st x
-                                  )\<rparr>)"
+lemma Process1b_Next_Implies_AcceptorAction:
+  assumes "Next st st2"
+      and "Process1b a m st st2"
+    shows "AcceptorAction a st st2"
 proof -
-  define st2 where "st2 = st\<lparr>recent_msgs := (
-                                  \<lambda>x. if x = a 
-                                      then m # recent_msgs st x
-                                      else recent_msgs st x ),
-                              known_msgs_acc := (
-                                    \<lambda>x. if a = x 
-                                        then m # known_msgs_acc st x
-                                        else known_msgs_acc st x
-                                )\<rparr>"
-  have "Store_acc a m st st2
-    \<and> recent_msgs st2 = (
-        \<lambda>x. if x = a 
-            then m # recent_msgs st x
-            else recent_msgs st x )
-    \<and> (msgs st2 = msgs st)
-    \<and> (queued_msg st2 = queued_msg st)
-    \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
-    \<and> (processed_lrns st2 = processed_lrns st)
-    \<and> (decision st2 = decision st)
-    \<and> (BVal st2 = BVal st)" by (simp add: st2_def)
-  show ?thesis
-    unfolding Process2a.simps
-    using \<open>Store_acc a m st st2 \<and> recent_msgs st2 = (\<lambda>x. if x = a then m # recent_msgs st x else recent_msgs st x) \<and> msgs st2 = msgs st \<and> queued_msg st2 = queued_msg st \<and> two_a_lrn_loop st2 = two_a_lrn_loop st \<and> processed_lrns st2 = processed_lrns st \<and> decision st2 = decision st \<and> BVal st2 = BVal st\<close> assms(1) assms(2) st2_def by fastforce
+  have "AcceptorProcessAction st st2"
+    using Next.simps Process1B_Not_ProposerSendAction Process1b_Not_FakeAcceptorAction Process1b_Not_LearnerProcessAction assms(1) assms(2) by blast
+  then show ?thesis
+    unfolding AcceptorProcessAction.simps
+    proof (elim exE)
+    fix a2
+    assume "AcceptorAction a2 st st2"
+    then show ?thesis
+    proof (cases "queued_msg st a = None")
+      case True
+      then show ?thesis
+        by (metis AcceptorAction.simps Process1b.elims(2) Process1bLearnerLoop.elims(2) Process1b_Not_Process1a Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep \<open>AcceptorAction a2 st st2\<close> assms(2) not_Cons_self)
+    next
+      case False
+      then show ?thesis
+      proof -
+        have f1: "\<And>aa. aa \<noteq> a \<or> queued_msg st2 aa = None"
+          by (meson Process1b.elims(2) assms(2))
+        have "\<forall>s a sa. \<exists>p. \<forall>sb aa sc ab sd se. (\<not> two_a_lrn_loop sb aa \<or> \<not> AcceptorAction aa sb sc \<or> Process1bLearnerLoop aa sb sc) \<and> (\<not> AcceptorAction ab sd se \<or> two_a_lrn_loop sd ab \<or> queued_msg sd ab = None \<or> Process1b ab (the (queued_msg sd ab)) sd se) \<and> (queued_msg s a \<noteq> None \<or> \<not> AcceptorAction a s sa \<or> two_a_lrn_loop s a \<or> Process1b a p s sa \<or> Process1a a p s sa)"
+          using AcceptorAction.simps by blast
+        then obtain pp :: "State \<Rightarrow> Acceptor \<Rightarrow> State \<Rightarrow> PreMessage" where
+          f2: "\<And>s a sa aa sb sc sd ab se. (\<not> two_a_lrn_loop s a \<or> \<not> AcceptorAction a s sa \<or> Process1bLearnerLoop a s sa) \<and> (\<not> AcceptorAction aa sb sc \<or> two_a_lrn_loop sb aa \<or> queued_msg sb aa = None \<or> Process1b aa (the (queued_msg sb aa)) sb sc) \<and> (queued_msg sd ab \<noteq> None \<or> \<not> AcceptorAction ab sd se \<or> two_a_lrn_loop sd ab \<or> Process1b ab (pp sd ab se) sd se \<or> Process1a ab (pp sd ab se) sd se)"
+          by metis
+        then have "\<not> two_a_lrn_loop st a2"
+          by (metis (no_types) Process1bLearnerLoop.simps Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep \<open>AcceptorAction a2 st st2\<close> assms(2))
+        then have "Process1a a2 (pp st a2 st2) st st2 \<or> a2 = a"
+          using f2 f1 by (metis (full_types) False Process1b.elims(2) \<open>AcceptorAction a2 st st2\<close>)
+        then have "a2 = a"
+          using f1 by (metis (no_types) False Process1a.elims(2))
+        then show ?thesis
+          using \<open>AcceptorAction a2 st st2\<close> by force
+      qed
+    qed
+  qed
 qed
 
-lemma Process2a_Enabled:
-  shows "Enabled (Process2a a m) st = (type m = T2a \<and> Recv_acc st a m)"
-  by (metis (no_types, lifting) Enabled.simps Process2a.simps Process2aAlt)
 
-lemma Process1bLearnerLoopStepAlt1:
-  assumes "WellFormed st (M2a ln a (recent_msgs st a))"
-  shows "Process1bLearnerLoopStep a ln st (
-                              st\<lparr>processed_lrns := (
-                                    \<lambda>x . if x = a
-                                         then {ln} \<union> processed_lrns st x
-                                         else processed_lrns st x),
-                                msgs := M2a ln a (recent_msgs st a) # msgs st, 
-                                known_msgs_acc := (
-                                    \<lambda>x. if a = x 
-                                        then M2a ln a (recent_msgs st a) # known_msgs_acc st x
-                                        else known_msgs_acc st x),
-                                recent_msgs := (
-                                    \<lambda>x . if x = a
-                                       then [M2a ln a (recent_msgs st a)]
-                                       else recent_msgs st x) \<rparr>)"
+
+
+lemma Process1bLearnerLoopDone_Not_ProposerSendAction :
+  assumes "Process1bLearnerLoopDone a st st2"
+    shows "\<not> ProposerSendAction st st2"
+  by (metis (no_types, lifting) Process1bLearnerLoopDone.elims(1) ProposerSendAction.elims(2) Send1a.elims(2) assms not_Cons_self select_convs(1) surjective update_convs(1) update_convs(6))
+
+lemma Process1bLearnerLoopDone_Not_LearnerRecv :
+  assumes "Process1bLearnerLoopDone a st st2"
+    shows "\<not> LearnerRecv ln m st st2"
+  by (smt (verit, best) LearnerRecv.elims(2) Process1bLearnerLoopDone.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(3) update_convs(6))
+
+lemma Process1bLearnerLoopDone_Not_LearnerDecide :
+  assumes "Process1bLearnerLoopDone a st st2"
+      and "st \<noteq> st2"
+    shows "\<not> LearnerDecide ln blt val st st2"
+  by (metis (no_types, lifting) LearnerDecide.elims(1) Process1bLearnerLoopDone.elims(2) assms(1) assms(2) select_convs(8) surjective update_convs(6) update_convs(8))
+
+lemma Process1bLearnerLoopDone_Not_LearnerProcessAction :
+  assumes "Process1bLearnerLoopDone a st st2"
+      and "st \<noteq> st2"
+    shows "\<not> LearnerProcessAction st st2"
+  by (meson LearnerProcessAction.elims LearnerAction.elims(2) Process1bLearnerLoopDone_Not_LearnerDecide Process1bLearnerLoopDone_Not_LearnerRecv assms)
+
+lemma Process1bLearnerLoopDone_Not_FakeSend1b :
+  assumes "Process1bLearnerLoopDone a st st2"
+    shows "\<not> FakeSend1b a2 st st2"
+  by (smt (verit, ccfv_threshold) FakeSend1b.elims(1) Process1bLearnerLoopDone.elims(2) assms ext_inject not_Cons_self2 surjective update_convs(1) update_convs(6))
+
+lemma Process1bLearnerLoopDone_Not_FakeSend2a :
+  assumes "Process1bLearnerLoopDone a st st2"
+    shows "\<not> FakeSend2a a2 st st2"
+  by (smt (verit, ccfv_threshold) FakeSend2a.elims(2) Process1bLearnerLoopDone.simps assms ext_inject not_Cons_self2 surjective update_convs(1) update_convs(6))
+
+lemma Process1bLearnerLoopDone_Not_FakeAcceptorAction :
+  assumes "Process1bLearnerLoopDone a st st2"
+    shows "\<not> FakeAcceptorAction st st2"
+  using FakeAcceptorAction.simps Process1bLearnerLoopDone_Not_FakeSend1b Process1bLearnerLoopDone_Not_FakeSend2a assms by blast
+
+lemma Process1bLearnerLoopDone_Next_Implies_AcceptorAction:
+  assumes "Next st st2"
+      and "Process1bLearnerLoopDone a st st2"
+      and "st \<noteq> st2"
+    shows "AcceptorAction a st st2"
 proof -
-  define new2a where "new2a = M2a ln a (recent_msgs st a)"
-  define st2 where "st2 = (st\<lparr>processed_lrns := (
-                                    \<lambda>x . if x = a
-                                         then {ln} \<union> processed_lrns st x
-                                         else processed_lrns st x),
-                                msgs := new2a # msgs st, 
-                                known_msgs_acc := (
-                                    \<lambda>x. if a = x 
-                                        then new2a # known_msgs_acc st x
-                                        else known_msgs_acc st x),
-                                recent_msgs := (
-                                    \<lambda>x . if x = a
-                                       then [new2a]
-                                       else recent_msgs st x) \<rparr>)"
-  have "Send new2a st st2
-          \<and> Store_acc a new2a st st2
-          \<and> (recent_msgs st2 = (
-              \<lambda>x . if x = a
-                 then [new2a]
-                 else recent_msgs st x))" 
-    by (simp add: st2_def)
-  have "processed_lrns st2 = (
-          \<lambda>x . if x = a
-               then {ln} \<union> processed_lrns st x
-               else processed_lrns st x)" 
-    by (simp add: st2_def)
-  have "(queued_msg st2 = queued_msg st)
-          \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
-          \<and> (decision st2 = decision st)
-          \<and> (BVal st2 = BVal st)" 
-    by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1bLearnerLoopStep.simps simps
-    using assms by force
+  have "\<not> two_a_lrn_loop st2 a"
+    using assms(2) by auto
+  have "two_a_lrn_loop st \<noteq> two_a_lrn_loop st2"
+    using assms(2) assms(3) by fastforce
+  have "\<forall>A. A \<noteq> a \<longrightarrow> two_a_lrn_loop st A = two_a_lrn_loop st2 A"
+    using assms(2) by auto
+  have "two_a_lrn_loop st a \<noteq> two_a_lrn_loop st2 a"
+    using \<open>\<forall>A. A \<noteq> a \<longrightarrow> two_a_lrn_loop st A = two_a_lrn_loop st2 A\<close> \<open>two_a_lrn_loop st \<noteq> two_a_lrn_loop st2\<close> by auto
+  have "two_a_lrn_loop st a"
+    using \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>two_a_lrn_loop st a \<noteq> two_a_lrn_loop st2 a\<close> by blast
+  have "AcceptorProcessAction st st2"
+    using Next.simps Process1bLearnerLoopDone_Not_FakeAcceptorAction Process1bLearnerLoopDone_Not_LearnerProcessAction Process1bLearnerLoopDone_Not_ProposerSendAction assms(1) assms(2) assms(3) by blast
+  then show ?thesis
+    unfolding AcceptorProcessAction.simps
+  proof (elim exE)
+    fix a2
+    assume "AcceptorAction a2 st st2"
+    have "Process1bLearnerLoopDone a2 st st2"
+      by (metis AcceptorAction.simps Process1a_Not_Process1bLearnerLoopDone Process1bLearnerLoop.simps Process1bLearnerLoopStep.elims(2) Process1b_Not_Process1bLearnerLoopDone \<open>AcceptorAction a2 st st2\<close> \<open>two_a_lrn_loop st \<noteq> two_a_lrn_loop st2\<close> assms(2))
+    have "a = a2"
+      using \<open>Process1bLearnerLoopDone a2 st st2\<close> \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>two_a_lrn_loop st a\<close> surjective by fastforce
+    show ?thesis
+      using \<open>AcceptorAction a2 st st2\<close> \<open>a = a2\<close> by blast
+  qed
 qed
 
-lemma Process1bLearnerLoopStepAlt2:
-  assumes "\<not> WellFormed st (M2a ln a (recent_msgs st a))"
-  shows "Process1bLearnerLoopStep a ln st (
-                        st\<lparr>processed_lrns := (
-                                    \<lambda>x . if x = a
-                                         then {ln} \<union> processed_lrns st x
-                                         else processed_lrns st x)\<rparr>)"
-proof -
-  define st2 where "st2 = st\<lparr>processed_lrns := (
-                                    \<lambda>x . if x = a
-                                         then {ln} \<union> processed_lrns st x
-                                         else processed_lrns st x)\<rparr>"
-  have "processed_lrns st2 = (
-          \<lambda>x . if x = a
-               then {ln} \<union> processed_lrns st x
-               else processed_lrns st x)" 
-    by (simp add: st2_def)
-  have "(msgs st2 = msgs st)
-          \<and> (known_msgs_acc st2 = known_msgs_acc st)
-          \<and> (known_msgs_lrn st2 = known_msgs_lrn st)
-          \<and> (recent_msgs st2 = recent_msgs st)" 
-    by (simp add: st2_def)
-  have "(queued_msg st2 = queued_msg st)
-          \<and> (two_a_lrn_loop st2 = two_a_lrn_loop st)
-          \<and> (decision st2 = decision st)
-          \<and> (BVal st2 = BVal st)" 
-    by (simp add: st2_def)
-  show ?thesis
-    unfolding Process1bLearnerLoopStep.simps
-    using assms by force
-qed
 
-lemma Process1bLearnerLoopStep_Enabled:
-  "Enabled (Process1bLearnerLoopStep a l) st = True"
-  by (meson Enabled.elims(3) Process1bLearnerLoopStepAlt1 Process1bLearnerLoopStepAlt2)
+lemma Process1a_not_looping_Next:
+  assumes "Next st st2"
+  shows "(\<exists>m\<in>set (msgs st). Process1a a m st st2) \<longrightarrow> \<not> two_a_lrn_loop st a"
+  by (meson AcceptorAction.elims(2) Process1a_Next_Implies_AcceptorAction Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(2) assms)
 
-lemma Process1bLearnerLoopDone_Enabled:
-  "Enabled (Process1bLearnerLoopDone a) st = (\<forall>ln :: Learner. ln \<in> processed_lrns st a)"
-  by auto
-
-(* Process1bLearnerLoop is always enabled.*)
-lemma Process1bLearnerLoop_Enabled:
-  "Enabled (Process1bLearnerLoop a) st = True"
-  by (metis Enabled.elims(1) Process1bLearnerLoop.elims(3) Process1bLearnerLoopDone_Enabled Process1bLearnerLoopStep_Enabled)
-
-lemma AcceptorAction_Enabled:
-  shows "Enabled (AcceptorAction a) st = (
-    is_safe a \<and> (
-      (\<not> two_a_lrn_loop st a \<and>
-       ((queued_msg st a \<noteq> None \<and> 
-         type (the (queued_msg st a)) = T1b \<and> 
-         Recv_acc st a (the (queued_msg st a))) \<or> 
-        (queued_msg st a = None \<and> (
-          \<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)
-        ))))
-      \<or> two_a_lrn_loop st a)
-  )"
-  by (metis AcceptorAction.simps Enabled.elims(1) Process1a_Enabled Process1bLearnerLoop_Enabled Process1b_Enabled)
-
-lemma AcceptorAction_NotEnabled:
-  assumes "is_safe a"
-  shows "\<not> Enabled (AcceptorAction a) st = (
-     (queued_msg st a = None \<or> 
-        type (the (queued_msg st a)) \<noteq> T1b \<or> 
-        \<not> Recv_acc st a (the (queued_msg st a))) \<and> 
-     (queued_msg st a \<noteq> None \<or> (
-         \<forall>m \<in> set (msgs st). \<not> Recv_acc st a m \<or> (type m \<noteq> T1a \<and> type m \<noteq> T1b)
-     ))
-     \<and> \<not> two_a_lrn_loop st a
-  )"
-  by (metis AcceptorAction_Enabled assms)
-
-
-lemma AcceptorAction_NotEnabled_Spec:
+lemma Process1a_not_looping:
   assumes "Spec f"
-      and "is_safe a"
-  shows "\<not> Enabled (AcceptorAction a) (f i) = (
-     (queued_msg (f i) a = None)
-     \<and> \<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b))
-     \<and> \<not> two_a_lrn_loop (f i) a
-  )"
-  by (metis AcceptorAction_NotEnabled QueuedMsgResult QueuedMsgSpec1.elims(2) QueuedMsgSpec2.elims(2) QueuedMsgSpec2_Conserved assms(1) assms(2))
+  shows "(\<exists>m\<in>set (msgs (f i)). Process1a a m (f i) (f (1 + i))) \<longrightarrow> \<not> two_a_lrn_loop (f i) a"
+proof (induction i)
+  case 0
+  then show ?case
+    by (metis Init.simps Spec.simps assms select_convs(6))
+next
+  case (Suc i)
+  then show ?case
+    by (metis AcceptorAction.elims(2) Process1a.elims(2) Process1a_Next_Implies_AcceptorAction Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(2) Send.elims(2) Spec.elims(2) assms not_Cons_self plus_1_eq_Suc)
+qed
 
-lemma LearnerRecv_Enabled:
-  shows "Enabled (LearnerRecv l m) st = Recv_lrn st l m"
-  using Enabled.simps LearnerRecv.simps by presburger
+lemma no_queue_during_loop_Next:
+  assumes "Next st st2" 
+      and "two_a_lrn_loop st a \<longrightarrow> queued_msg st a = None"
+      and "(\<exists>m\<in>set (msgs st). Process1a a m st st2) \<longrightarrow> \<not> two_a_lrn_loop st a"
+    shows "two_a_lrn_loop st2 a \<longrightarrow> queued_msg st2 a = None"
+proof -
+  have css: "ProposerSendAction st st2 \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                    \<and> queued_msg st A = None 
+                    \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A \<noteq> None 
+                      \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+        (\<exists>A :: Acceptor. is_safe A
+                      \<and> two_a_lrn_loop st A 
+                      \<and> Process1bLearnerLoopDone A st st2) \<or>
+        LearnerProcessAction st st2 \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend1b A st st2) \<or>
+        (\<exists>A :: Acceptor. \<not> (is_safe A)
+                      \<and> FakeSend2a A st st2)
+        "
+        using assms next_split by presburger
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        using assms(2) by auto
+    next
+      assume "\<exists>A. is_safe A \<and>
+                queued_msg st A = None \<and>
+                (\<exists>m\<in>set (msgs st).
+                    Process1a A m st st2)"
+      then show ?thesis
+      proof (clarify)
+        fix A m
+        assume "is_safe A"
+           and "queued_msg st A = None"
+           and "m \<in> set (msgs st)"
+           and "Process1a A m st st2"
+           and "two_a_lrn_loop st2 a"
+        then show "queued_msg st2 a = None"
+        proof (cases "A = a")
+          case True
+          define new1b where "new1b = M1b A (m # recent_msgs st A)"
+          show ?thesis
+          proof (cases "WellFormed st new1b")
+            case True
+            then show ?thesis
+              by (metis Process1a.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1a A m st st2)\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2) assms(3))
+          next
+            case False
+            then show ?thesis
+              by (metis Process1a.elims(2) True \<open>Process1a A m st st2\<close> \<open>queued_msg st A = None\<close> new1b_def)
+          qed
+        next
+          case False
+          then show ?thesis
+            by (metis Process1a.elims(2) \<open>Process1a A m st st2\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2))
+        qed
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+      proof -
+        show ?thesis
+          using \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> assms(2) by force
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+      proof -
+        show ?thesis
+          using \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1b A m st st2)\<close> assms(2) by fastforce
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+        by (metis Process1bLearnerLoopStep.elims(2) assms(2))
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+      proof (clarify)
+        fix A
+        assume "is_safe A"
+           and "two_a_lrn_loop st A"
+           and "Process1bLearnerLoopDone A st st2"
+           and "two_a_lrn_loop st2 a"
+        then show "queued_msg st2 a = None"
+        proof (cases "A = a")
+          case True
+          then show ?thesis
+            using \<open>Process1bLearnerLoopDone A st st2\<close> \<open>two_a_lrn_loop st A\<close> assms(2) by auto
+        next
+          case False
+          then show ?thesis
+            using \<open>Process1bLearnerLoopDone A st st2\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2) by auto
+        qed
+      qed
+    next
+      assume "LearnerProcessAction st st2"
+      then show ?thesis
+        by (smt (verit, del_insts) LearnerProcessAction.elims LearnerAction.elims(2) LearnerDecide.simps LearnerRecv.elims(2) assms(2) ext_inject surjective update_convs(3) update_convs(8))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      show ?thesis
+        by (metis FakeSend1b.elims(1) \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) ext_inject surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      then show ?thesis
+        by (metis FakeSend2a.simps assms(2) ext_inject surjective update_convs(1))
+    qed
+qed
 
-lemma LearnerDecide_Enabled:
-  shows "Enabled (LearnerDecide l b v) st = ChosenIn st l b v"
-  using Enabled.simps LearnerDecide.simps by presburger
-
-lemma LearnerAction_Enabled:
-  shows "Enabled (LearnerAction l) st = (
-      (\<exists>m\<in>set (msgs st). Recv_lrn st l m) \<or> 
-      (\<exists>b v. ChosenIn st l b v))"
-  by (metis Enabled.simps LearnerAction.elims(2) LearnerAction.elims(3) LearnerDecide_Enabled LearnerRecv_Enabled)
-
-
-
-(*Weak fairness*)
-fun WF :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
-  "WF p f = (
-    \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (1 + j)))
-  )"
+lemma no_queue_during_loop:
+  assumes "Spec f"
+  shows "two_a_lrn_loop (f i) a \<longrightarrow> queued_msg (f i) a = None"
+proof (induction i)
+  case 0
+  then show ?case
+    by (metis Init.elims Spec.elims(2) assms ext_inject surjective)
+next
+  case (Suc i)
+  then show ?case
+    by (metis Process1a_not_looping Spec.elims(2) assms no_queue_during_loop_Next plus_1_eq_Suc)
+qed
 
 lemma ballot_present:
   shows "M1a b \<in> set l \<longrightarrow> b \<in> (Get1a ` set l)"
@@ -1180,6 +1143,124 @@ lemma LearnerDecide_Enables_Perminent_Next:
   using Choice_Made_Perminent LearnerDecide_Enabled assms(1) assms(2) by blast
 
 
+
+
+
+
+
+
+
+
+
+
+
+fun UnKnown2a :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
+  "UnKnown2a st l b v = 
+    {x . x \<in> set (msgs st) 
+      \<and> type x = T2a 
+      \<and> lrn x = l 
+      \<and> B x b 
+      \<and> V st x v
+      \<and> WellFormed st x
+      \<and> Proper_lrn st l x  }"
+
+lemma UnKnown2a_Conserved:
+  assumes "Spec f"
+      and "i \<le> j"
+    shows "UnKnown2a (f i) L BB v \<subseteq> UnKnown2a (f j) L BB v"
+proof -
+  have "UnKnown2a (f i) L BB v \<subseteq> set (msgs (f j))"
+    by (metis (no_types, lifting) UnKnown2a.elims assms(1) assms(2) mem_Collect_eq msgs_preserved subsetI)
+  have "BVal (f j) = BVal (f i)"
+    using BVal_Constant \<open>Spec f\<close> by blast
+  then have "UnKnown2a (f i) L BB v \<subseteq> {x . V (f j) x v}"
+    by fastforce
+  have "\<forall>x. Proper_lrn (f i) L x \<longrightarrow> Proper_lrn (f j) L x"
+    using Proper_lrn.simps assms(1) assms(2) known_msgs_lrn_preserved by blast
+  show ?thesis
+    sledgehammer
+    by (smt (verit) Collect_mono_iff UnKnown2a.elims WellFormed_monotone \<open>BVal (f j) = BVal (f i)\<close> \<open>UnKnown2a (f i) L BB v \<subseteq> set (msgs (f j))\<close> \<open>UnKnown2a (f i) L BB v \<subseteq> {x. V (f j) x v}\<close> \<open>\<forall>x. Proper_lrn (f i) L x \<longrightarrow> Proper_lrn (f j) L x\<close> mem_Collect_eq subsetD)
+qed
+
+lemma Network_Assumption_1_0:
+  assumes "Spec f"
+      and "S \<subseteq> UnKnown2a (f i) L BB v"
+      and "j \<ge> i"
+      and "\<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j)"
+      and "TrustLive L (acc ` S)"
+    shows "ChosenIn (f j) L BB v"
+proof -
+  have "\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)"
+    using assms(4) by auto
+  then have "\<forall>m\<in>set (msgs (f j)). \<not> Recv_lrn (f j) L m"
+    by auto
+  then have h: "\<forall>m\<in>set (msgs (f j)). 
+                 m \<in> UnKnown2a (f j) L BB v \<longrightarrow> 
+                 m \<in> set (known_msgs_lrn (f j) L)"
+    by auto
+  have "S \<subseteq> UnKnown2a (f j) L BB v"
+    using UnKnown2a_Conserved assms(1) assms(2) assms(3) by blast
+  then have "\<forall>m\<in>S. m \<in> set (known_msgs_lrn (f j) L)"
+    by (metis (mono_tags, lifting) UnKnown2a.elims h mem_Collect_eq subsetD)
+  then have "S \<subseteq> Known2a (f j) L BB v"
+    by (smt (verit, del_insts) Known2a.simps UnKnown2a.elims \<open>S \<subseteq> UnKnown2a (f j) L BB v\<close> mem_Collect_eq subsetD subsetI)
+  then show ?thesis
+    using assms(5) by auto
+qed
+
+fun Network_Assumption_1 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Network_Assumption_1 Q L BB f = (
+    (\<exists>S i v. S \<subseteq> UnKnown2a (f i) L BB v \<and> acc ` S = Q \<and>
+           (\<exists>j \<ge> i. \<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j))) \<and>
+    (WF (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) f)
+  )"
+
+fun Liveness_1 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Liveness_1 f = ( 
+    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
+    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
+    (Network_Assumption_1 Q L BB f \<longrightarrow> 
+    (\<exists>j. decision (f j) L BB \<noteq> {})
+  ))"
+
+
+theorem LivenessResult_1 :
+  assumes "Spec f"
+  shows "Liveness_1 f"
+  unfolding Liveness_1.simps Network_Assumption_1.simps WF.simps
+proof (clarify)
+  fix L BB S i v j
+  assume "is_quorum (acc ` S)"
+     and "Ball (acc ` S) is_safe"
+     and "TrustLive L (acc ` S)"
+     and h: "\<forall>i. (\<forall>j\<ge>i. Enabled (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) (f j)) \<longrightarrow>
+             (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+     and "S \<subseteq> UnKnown2a (f i) L BB v"
+     and "i \<le> j"
+     and hh: "\<not> Enabled (\<lambda>st st2. \<exists>m\<in>set (msgs st). LearnerRecv L m st st2) (f j)"
+  have "TrustLive L (acc ` S)"
+    using \<open>TrustLive L (acc ` S)\<close> by blast
+  then have cha: "ChosenIn (f j) L BB v"
+    using Network_Assumption_1_0 hh \<open>S \<subseteq> UnKnown2a (f i) L BB v\<close> \<open>j \<ge> i\<close> \<open>Spec f\<close> by blast
+  have h0: "\<forall>i. (\<forall>j\<ge>i. (\<exists>v. ChosenIn (f j) L BB v)) \<longrightarrow>
+            (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+    using h by auto
+  have "(\<forall>k\<ge>j. (\<exists>v. ChosenIn (f k) L BB v))"
+    using Choice_Made_Perminent cha assms by blast
+  then have "(\<exists>k\<ge>j. \<exists>v. LearnerDecide L BB v (f k) (f (1 + k)))"
+    using h0 by blast
+  then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+  proof (clarify)
+    fix k v2
+    assume "j \<le> k"
+       and "LearnerDecide L BB v2 (f k) (f (1 + k))"
+    then have "v2 \<in> decision (f (1 + k)) L BB"
+      by force
+    then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+      by blast
+  qed
+qed
+
 fun Network_Assumption_0 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
   "Network_Assumption_0 Q L BB f = (
     (\<exists>i v. ChosenIn (f i) L BB v) \<and>
@@ -1187,7 +1268,7 @@ fun Network_Assumption_0 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ba
   )"
 
 fun Liveness_0 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
-  "Liveness_0 f = (
+  "Liveness_0 f = ( 
     \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
     (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
     (Network_Assumption_0 Q L BB f \<longrightarrow> 
@@ -1195,7 +1276,7 @@ fun Liveness_0 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
   ))"
 
 
-theorem LivenessResult :
+theorem LivenessResult_0 :
   assumes "Spec f"
   shows "Liveness_0 f"
   unfolding Liveness_0.simps Network_Assumption_0.simps WF.simps

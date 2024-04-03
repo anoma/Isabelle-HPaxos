@@ -337,7 +337,6 @@ fun q :: "State \<Rightarrow> PreMessage \<Rightarrow> Acceptor set" where
 fun WellFormed :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
   "WellFormed st m = (
     isValidMessage m
-    \<and> (\<exists> b :: Ballot. B m b)
     \<and> (type m = T1b \<longrightarrow> (\<forall>y \<in> Tran m. m \<noteq> y \<and> SameBallot m y \<longrightarrow> type y = T1a))
     \<and> (type m = T2a \<longrightarrow> TrustLive (lrn m) (q st m))
   )"
