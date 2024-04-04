@@ -1250,7 +1250,6 @@ next
     by (metis KnownMsgs_accSpecResult Msg_ref_Spec_Next RecentMsgsSpecResult Spec.elims(2) assms)
 qed
 
-
 fun WellFormed_Spec :: "State \<Rightarrow> bool" where
   "WellFormed_Spec st = (
     \<forall>m \<in> set (msgs st). is_safe (acc m) \<longrightarrow> WellFormed st m
@@ -1830,52 +1829,116 @@ fun WF :: "(State \<Rightarrow> State \<Rightarrow> bool) \<Rightarrow> (nat \<R
     \<forall>i. (\<forall>j \<ge> i. Enabled p (f j)) \<longrightarrow> (\<exists>j \<ge> i. p (f j) (f (1 + j)))
   )"
 
-
-
-lemma Learner_Eventually_Gets_All_Safe_Messages:
-  assumes "Spec f"
-      and "\<forall>m\<in>set (msgs (f i)). \<not> Enabled (LearnerRecv L m) (f i)"
-    shows "m\<in>set (msgs (f i)) \<and> is_safe (acc m) \<longrightarrow> m \<in> set (known_msgs_lrn (f i) L)"
-proof (induction m; clarify)
+lemma Tran_Tran:
+  shows "\<forall>x \<in> Tran m. Tran x \<subseteq> Tran m"
+proof (induction m)
   case (M1a x)
-  assume "M1a x \<in> set (msgs (f i))"
-  have "\<not> Enabled (LearnerRecv L (M1a x)) (f i)"
-    using \<open>M1a x \<in> set (msgs (f i))\<close> assms(2) by blast
-  then show "M1a x \<in> set (known_msgs_lrn (f i) L)" 
-    by (metis LearnerRecv_Enabled M1a_Good MessageType.distinct(1) MessageType.distinct(3) Recv_lrn.elims(1) WellFormed.elims(1) \<open>M1a x \<in> set (msgs (f i))\<close> isValidMessage.simps(1) type.simps(1))
+  then show ?case
+    by simp
 next
   case (M1b x1a x2)
-  assume "(\<And>x2a. x2a \<in> set x2 \<Longrightarrow>
-               x2a \<in> set (msgs (f i)) \<and>
-               is_safe (acc x2a) \<longrightarrow>
+  then have "\<And>x1a x2. (\<And>x2a. x2a \<in> set x2 \<Longrightarrow>
+                   \<forall>x\<in>Tran x2a.  Tran x \<subseteq> Tran x2a) \<Longrightarrow>
+       \<forall>x\<in>{M1b x1a x2} \<union> \<Union> (set (map Tran x2)).
+          Tran x \<subseteq> {M1b x1a x2} \<union> \<Union> (set (map Tran x2))"
+    by (smt (verit, ccfv_SIG) Tran.simps(2) Union_iff imageE image_set insertE insert_is_Un insert_subset mk_disjoint_insert subsetI)
+  then have "\<forall>x\<in>{M1b x1a x2} \<union> \<Union> (set (map Tran x2)).
+               Tran x \<subseteq> {M1b x1a x2} \<union> \<Union> (set (map Tran x2))"
+    using M1b by blast
+  then show ?case
+    by (metis Tran.simps(2) list.set_map)
+next
+  case (M2a x1a x2 x3)
+  then have "\<And>x1a x2 x3.
+       (\<And>x3a. x3a \<in> set x3 \<Longrightarrow> \<forall>x\<in>Tran x3a. Tran x \<subseteq> Tran x3a) \<Longrightarrow>
+       \<forall>x\<in>{M2a x1a x2 x3} \<union> \<Union> (set (map Tran x3)).
+          Tran x \<subseteq> {M2a x1a x2 x3} \<union> \<Union> (set (map Tran x3))"
+    by (smt (verit, ccfv_SIG) Tran.simps(3) Union_iff imageE image_set insertE insert_is_Un insert_subset mk_disjoint_insert subsetI)
+  then have "\<forall>x\<in>{M2a x1a x2 x3} \<union> \<Union> (set (map Tran x3)).
+               Tran x \<subseteq> {M2a x1a x2 x3} \<union> \<Union> (set (map Tran x3))"
+    using M2a by blast
+  then show ?case
+    by (metis Tran.simps(3) list.set_map)
+qed
+
+fun FullyWellFormed :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "FullyWellFormed st m = (\<forall>x \<in> Tran m. WellFormed st x)"
+
+lemma FullyWellFormed_Trans:
+  shows "FullyWellFormed st m \<longrightarrow> (\<forall>x \<in> Tran m. FullyWellFormed st x)"
+proof (induction m)
+  case (M1a x)
+  then show ?case 
+    by (metis Tran.simps(1) singletonD)
+next
+  case (M1b x1a x2)
+  then show ?case 
+    by (metis FullyWellFormed.elims(1) Tran_Tran subset_iff)
+next
+  case (M2a x1a x2 x3)
+  then show ?case
+    by (metis FullyWellFormed.elims(1) Tran_Tran subset_iff)
+qed
+
+
+fun PresentlyWellFormed :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "PresentlyWellFormed st m = (\<forall>x \<in> Tran m. x \<in> set (msgs st) \<and> WellFormed st x)"
+
+lemma PresentlyWellFormed_Trans:
+  shows "PresentlyWellFormed st m \<longrightarrow> (\<forall>x \<in> Tran m. PresentlyWellFormed st x)"
+  by (induction m; metis PresentlyWellFormed.elims(1) Tran_Tran subset_iff)
+
+lemma PresentlyWellFormed_Constant:
+  assumes "Spec f"
+      and "i \<le> j"
+    shows "PresentlyWellFormed (f i) m \<longrightarrow> PresentlyWellFormed (f j) m"
+  by (induction m; meson PresentlyWellFormed.simps Wellformed_Conservation assms(1) assms(2) msgs_preserved)
+
+lemma Learner_Eventually_Gets_All_PresentlyWellFormed_Messages:
+  assumes "Spec f"
+      and "\<forall>m\<in>set (msgs (f i)). \<not> Enabled (LearnerRecv L m) (f i)"
+    shows "PresentlyWellFormed (f i) m \<longrightarrow> m \<in> set (known_msgs_lrn (f i) L)"
+proof (induction m; clarify)
+  case (M1a x)
+  assume "PresentlyWellFormed (f i) (M1a x)"
+  then show "M1a x \<in> set (known_msgs_lrn (f i) L)" 
+    by (metis LearnerRecv_Enabled M1a_Good PresentlyWellFormed.elims(2) Recv_lrn.elims(3) Tran.simps(1) assms(2) singletonI type.simps(1))
+next
+  case (M1b x1a x2)
+  assume h: "(\<And>x2a. x2a \<in> set x2 \<Longrightarrow>
+               PresentlyWellFormed (f i) x2a \<longrightarrow>
                x2a \<in> set (known_msgs_lrn (f i) L))"
-      and "M1b x1a x2 \<in> set (msgs (f i))"
-      and "is_safe (acc (M1b x1a x2))"
+      and "PresentlyWellFormed (f i) (M1b x1a x2)"
+  have "M1b x1a x2 \<in> set (msgs (f i))"
+    by (metis PresentlyWellFormed.elims(2) Tran.simps(2) Un_iff \<open>PresentlyWellFormed (f i) (M1b x1a x2)\<close> singletonI)
   have "WellFormed (f i) (M1b x1a x2)"
-    using WellFormed_Spec.simps WellFormed_Spec_Invariant \<open>M1b x1a x2 \<in> set (msgs (f i))\<close> \<open>is_safe (acc (M1b x1a x2))\<close> assms(1) by blast
+    by (metis PresentlyWellFormed.elims(2) Tran.simps(2) Un_iff \<open>PresentlyWellFormed (f i) (M1b x1a x2)\<close> singletonI)
   then have "\<forall>y\<in>Tran (M1b x1a x2). M1b x1a x2 \<noteq> y \<and> SameBallot (M1b x1a x2) y \<longrightarrow> type y = T1a"
     by (meson WellFormed.elims(2) type.simps(2))
   have "\<not> Enabled (LearnerRecv L (M1b x1a x2)) (f i)"
     using \<open>M1b x1a x2 \<in> set (msgs (f i))\<close> assms(2) by blast
-  then have "\<not> Recv_lrn (f i) L (M1b x1a x2)"    
+  then have "\<not> Recv_lrn (f i) L (M1b x1a x2)"
     using LearnerRecv_Enabled by blast
-  have "\<forall>r\<in>set x2. is_safe (acc r)"
-    sorry
-  then have "Proper_lrn (f i) L (M1b x1a x2)"
-    unfolding Proper_lrn.simps ref.simps
-    sorry
-
-  then show "M1b x1a x2 \<in> set (known_msgs_lrn (f i) L)" sorry
+  have "\<forall>r\<in>set x2. r \<in> set (msgs (f i))"
+    by (metis Message_ref_Tran PresentlyWellFormed.elims(1) \<open>PresentlyWellFormed (f i) (M1b x1a x2)\<close> ref.simps(2))
+  have "Proper_lrn (f i) L (M1b x1a x2)"
+    using Message_ref_Tran PresentlyWellFormed_Trans Proper_lrn.simps \<open>PresentlyWellFormed (f i) (M1b x1a x2)\<close> h ref.simps(2) by blast
+  show "M1b x1a x2 \<in> set (known_msgs_lrn (f i) L)"
+    using Recv_lrn.simps \<open>Proper_lrn (f i) L (M1b x1a x2)\<close> \<open>WellFormed (f i) (M1b x1a x2)\<close> \<open>\<not> Recv_lrn (f i) L (M1b x1a x2)\<close> by presburger
 next
   case (M2a x1a x2 x3)
   assume "(\<And>x3a. x3a \<in> set x3 \<Longrightarrow>
-               x3a \<in> set (msgs (f i)) \<and>
-               is_safe (acc x3a) \<longrightarrow>
+               PresentlyWellFormed (f i) x3a \<longrightarrow>
                x3a \<in> set (known_msgs_lrn (f i) L))"
-      and "M2a x1a x2 x3 \<in> set (msgs (f i))"
-      and "is_safe (acc (M2a x1a x2 x3))"
-  then show "M2a x1a x2 x3 \<in> set (known_msgs_lrn (f i) L)" sorry
+      and "PresentlyWellFormed (f i) (M2a x1a x2 x3)"
+  have "WellFormed (f i) (M2a x1a x2 x3)"
+    by (metis PresentlyWellFormed.elims(1) Tran.simps(3) Un_iff \<open>PresentlyWellFormed (f i) (M2a x1a x2 x3)\<close> singletonI)
+  have "Proper_lrn (f i) L (M2a x1a x2 x3)"
+    using M2a Message_ref_Tran PresentlyWellFormed_Trans Proper_lrn.simps \<open>PresentlyWellFormed (f i) (M2a x1a x2 x3)\<close> ref.simps(3) by blast
+  show "M2a x1a x2 x3 \<in> set (known_msgs_lrn (f i) L)" 
+    by (metis LearnerRecv_Enabled PresentlyWellFormed.elims(1) Recv_lrn.elims(3) Tran.simps(3) Un_iff \<open>PresentlyWellFormed (f i) (M2a x1a x2 x3)\<close> \<open>Proper_lrn (f i) L (M2a x1a x2 x3)\<close> assms(2) singletonI)
 qed
+
 
 
 

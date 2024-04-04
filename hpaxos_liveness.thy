@@ -5,6 +5,131 @@ begin
 
 
 
+fun UnKnown2a_2 :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
+  "UnKnown2a_2 st l b v = 
+    {x . x \<in> set (msgs st) 
+      \<and> type x = T2a 
+      \<and> lrn x = l 
+      \<and> B x b 
+      \<and> V st x v
+      \<and> PresentlyWellFormed st x  }"
+
+
+fun UnKnown1b_2 :: "Acceptor \<Rightarrow> State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
+  "UnKnown1b_2 a st l b v = 
+    {x . x \<in> set (msgs st) 
+      \<and> type x = T1b 
+      \<and> B x b 
+      \<and> V st x v
+      \<and> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B x b \<longrightarrow> mb \<le> b)
+      \<and> PresentlyWellFormed st x }"
+
+
+lemma Network_Assumption_2_Goal:
+  assumes "Spec f" 
+      and "\<forall>a \<in> Q. \<exists>m. m \<in> UnKnown1b_2 a (f i) L BB v"
+      and "j \<ge> i"
+      and "\<forall>a \<in> Q. \<not> Enabled (AcceptorAction a) (f j)"
+   shows "\<exists>S v. S \<subseteq> UnKnown2a_2 (f j) L BB v \<and> acc ` S = Q"
+  sorry
+
+
+
+fun Network_Assumption_2 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Network_Assumption_2 Q L BB f = (
+    (\<exists>S i v. S \<subseteq> UnKnown2a_2 (f i) L BB v \<and> acc ` S = Q \<and>
+           (\<exists>j \<ge> i. \<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j))) \<and>
+    (WF (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) f)
+  )"
+
+fun Liveness_2 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
+  "Liveness_2 f = ( 
+    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
+    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
+    (Network_Assumption_2 Q L BB f \<longrightarrow> 
+    (\<exists>j. decision (f j) L BB \<noteq> {})
+  ))"
+
+
+lemma UnKnown2a_2_Conserved:
+  assumes "Spec f"
+      and "i \<le> j"
+    shows "UnKnown2a_2 (f i) L BB v \<subseteq> UnKnown2a_2 (f j) L BB v"
+proof -
+  have "UnKnown2a_2 (f i) L BB v \<subseteq> set (msgs (f j))"
+    by (metis (no_types, lifting) UnKnown2a_2.elims assms(1) assms(2) mem_Collect_eq msgs_preserved subsetI)
+  have "BVal (f j) = BVal (f i)"
+    using BVal_Constant \<open>Spec f\<close> by blast
+  then have "UnKnown2a_2 (f i) L BB v \<subseteq> {x . V (f j) x v}"
+    by fastforce
+  have "\<forall>x. PresentlyWellFormed (f i) x \<longrightarrow> PresentlyWellFormed (f j) x"
+    using \<open>i \<le> j\<close> \<open>Spec f\<close> PresentlyWellFormed_Constant by blast
+  then have "UnKnown2a_2 (f i) L BB v \<subseteq> {x . PresentlyWellFormed (f j) x}"
+    using UnKnown2a_2.elims by blast
+  show ?thesis
+    by (smt (verit) Collect_mono_iff UnKnown2a_2.elims \<open>UnKnown2a_2 (f i) L BB v \<subseteq> set (msgs (f j))\<close> \<open>UnKnown2a_2 (f i) L BB v \<subseteq> {x. PresentlyWellFormed (f j) x}\<close> \<open>UnKnown2a_2 (f i) L BB v \<subseteq> {x. V (f j) x v}\<close> mem_Collect_eq subsetD)
+qed
+
+lemma Network_Assumption_2_0:
+  assumes "Spec f"
+      and "S \<subseteq> UnKnown2a_2 (f i) L BB v"
+      and "j \<ge> i"
+      and "\<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j)"
+      and "TrustLive L (acc ` S)"
+    shows "ChosenIn (f j) L BB v"
+proof -
+  have "\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)"
+    using assms(4) by auto
+  then have "\<forall>m\<in>set (msgs (f j)). \<not> Recv_lrn (f j) L m"
+    by auto
+  have "S \<subseteq> UnKnown2a_2 (f j) L BB v"
+    using UnKnown2a_2_Conserved assms(1) assms(2) assms(3) by blast
+  then have "\<forall>m\<in>S. m \<in> set (known_msgs_lrn (f j) L)"
+    by (smt (verit, best) Learner_Eventually_Gets_All_PresentlyWellFormed_Messages UnKnown2a_2.elims \<open>\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)\<close> assms(1) mem_Collect_eq subsetD)
+  then show ?thesis
+    by (smt (verit) ChosenIn.simps Collect_mem_eq Collect_mono_iff Known2a.simps UnKnown2a_2.elims \<open>S \<subseteq> UnKnown2a_2 (f j) L BB v\<close> assms(5))
+qed
+
+theorem LivenessResult_2 :
+  assumes "Spec f"
+  shows "Liveness_2 f"
+  unfolding Liveness_2.simps Network_Assumption_2.simps WF.simps
+proof (clarify)
+  fix L BB S i v j
+  assume "is_quorum (acc ` S)"
+     and "Ball (acc ` S) is_safe"
+     and "TrustLive L (acc ` S)"
+     and h: "\<forall>i. (\<forall>j\<ge>i. Enabled (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) (f j)) \<longrightarrow>
+             (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+     and "S \<subseteq> UnKnown2a_2 (f i) L BB v"
+     and "i \<le> j"
+     and hh: "\<not> Enabled (\<lambda>st st2. \<exists>m\<in>set (msgs st). LearnerRecv L m st st2) (f j)"
+  have "TrustLive L (acc ` S)"
+    using \<open>TrustLive L (acc ` S)\<close> by blast
+  then have cha: "ChosenIn (f j) L BB v"
+    using Network_Assumption_2_0 hh \<open>S \<subseteq> UnKnown2a_2 (f i) L BB v\<close> \<open>j \<ge> i\<close> \<open>Spec f\<close> by blast
+  have h0: "\<forall>i. (\<forall>j\<ge>i. (\<exists>v. ChosenIn (f j) L BB v)) \<longrightarrow>
+            (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
+    using h by auto
+  have "(\<forall>k\<ge>j. (\<exists>v. ChosenIn (f k) L BB v))"
+    using Choice_Made_Perminent cha assms by blast
+  then have "(\<exists>k\<ge>j. \<exists>v. LearnerDecide L BB v (f k) (f (1 + k)))"
+    using h0 by blast
+  then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+  proof (clarify)
+    fix k v2
+    assume "j \<le> k"
+       and "LearnerDecide L BB v2 (f k) (f (1 + k))"
+    then have "v2 \<in> decision (f (1 + k)) L BB"
+      by force
+    then show "\<exists>j. decision (f j) L BB \<noteq> {}"
+      by blast
+  qed
+qed
+
+
+
+
 
 
 
@@ -485,7 +610,7 @@ proof -
           Tran m \<subseteq> set (known_msgs_acc (f i) a) \<and>
           (\<exists>b :: Ballot. B m b)
     )"
-    by (meson KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult assms(1) assms(2))
+    by (meson B.elims(3) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult assms(1) assms(2))
   show ?thesis
     by (simp add: \<open>x \<in> set (known_msgs_acc (f i) a)\<close> q)
 qed
@@ -1141,9 +1266,6 @@ lemma LearnerDecide_Enables_Perminent_Next:
       and "Enabled (LearnerDecide L BB v) (f i)"
     shows "j \<ge> i \<longrightarrow> Enabled (LearnerDecide L BB v) (f j)"
   using Choice_Made_Perminent LearnerDecide_Enabled assms(1) assms(2) by blast
-
-
-
 
 
 

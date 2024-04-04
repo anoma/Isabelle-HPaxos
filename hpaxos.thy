@@ -288,7 +288,7 @@ fun Con :: "Learner \<Rightarrow> PreMessage \<Rightarrow> Learner set" where
 
 (*
 2a-message is _buried_ if there exists a quorum of acceptors that have seen
-2a-messages with different values, the same learner, and higher bltlot
+2a-messages with different values, the same learner, and higher ballot
 numbers.
 *)
 fun Buried :: "State \<Rightarrow> PreMessage \<Rightarrow> PreMessage \<Rightarrow> bool" where
