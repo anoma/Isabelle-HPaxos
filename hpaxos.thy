@@ -258,6 +258,10 @@ fun MaxBal :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> b
 fun SameBallot :: "PreMessage \<Rightarrow> PreMessage \<Rightarrow> bool" where
   "SameBallot x y = (\<forall> b. B x b = B y b)"
 
+lemma SameBallot2:
+  shows "SameBallot x y = (Get1a x = Get1a y)"
+  by auto
+
 (*
 The acceptor is _caught_ in a message x if the transitive references of x
 include evidence such as two messages both signed by the acceptor, in which

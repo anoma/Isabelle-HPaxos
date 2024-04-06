@@ -2,9 +2,6 @@ theory hpaxos_liveness
 imports Main hpaxos hpaxos_safety hpaxos_aux
 begin
 
-
-
-
 fun UnKnown2a_2 :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
   "UnKnown2a_2 st l b v = 
     {x . x \<in> set (msgs st) 
@@ -14,24 +11,20 @@ fun UnKnown2a_2 :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarro
       \<and> V st x v
       \<and> PresentlyWellFormed st x  }"
 
-
-fun UnKnown1b_2 :: "Acceptor \<Rightarrow> State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
-  "UnKnown1b_2 a st l b v = 
-    {x . x \<in> set (msgs st) 
-      \<and> type x = T1b 
-      \<and> B x b 
-      \<and> V st x v
-      \<and> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B x b \<longrightarrow> mb \<le> b)
-      \<and> PresentlyWellFormed st x }"
-
-
-lemma Network_Assumption_2_Goal:
-  assumes "Spec f" 
-      and "\<forall>a \<in> Q. \<exists>m. m \<in> UnKnown1b_2 a (f i) L BB v"
-      and "j \<ge> i"
-      and "\<forall>a \<in> Q. \<not> Enabled (AcceptorAction a) (f j)"
-   shows "\<exists>S v. S \<subseteq> UnKnown2a_2 (f j) L BB v \<and> acc ` S = Q"
+lemma t1b_proccessed:
+  assumes "Spec f"
+      and "\<forall>m \<in> set (recent_msgs (f i) a). PresentlyWellFormed (f i) m"
+      and "{n . n \<in> set (msgs (f i)) \<and> n \<notin> set (known_msgs_acc (f i) a)} \<noteq> {}"
+      and "\<forall>m \<in> {n . n \<in> set (msgs (f i)) \<and> n \<notin> set (known_msgs_acc (f i) a)}. 
+              m \<in> set (msgs (f i)) \<and>
+              type m = T1b \<and>
+              m \<notin> set (known_msgs_acc (f i) a) \<and>
+              PresentlyWellFormed (f i) m \<and>
+              (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)"
+      and "\<not> Enabled (AcceptorAction a) (f j)"
+    shows "\<exists>m \<in> UnKnown2a_2 (f j) L BB v. acc m = a"
   sorry
+
 
 
 
@@ -44,11 +37,11 @@ fun Network_Assumption_2 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ba
 
 fun Liveness_2 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
   "Liveness_2 f = ( 
-    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. is_quorum Q \<longrightarrow>
-    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
-    (Network_Assumption_2 Q L BB f \<longrightarrow> 
+    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set.
+    TrustLive L Q \<longrightarrow> 
+    Network_Assumption_2 Q L BB f \<longrightarrow> 
     (\<exists>j. decision (f j) L BB \<noteq> {})
-  ))"
+  )"
 
 
 lemma UnKnown2a_2_Conserved:
@@ -96,9 +89,7 @@ theorem LivenessResult_2 :
   unfolding Liveness_2.simps Network_Assumption_2.simps WF.simps
 proof (clarify)
   fix L BB S i v j
-  assume "is_quorum (acc ` S)"
-     and "Ball (acc ` S) is_safe"
-     and "TrustLive L (acc ` S)"
+  assume "TrustLive L (acc ` S)"
      and h: "\<forall>i. (\<forall>j\<ge>i. Enabled (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) (f j)) \<longrightarrow>
              (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
      and "S \<subseteq> UnKnown2a_2 (f i) L BB v"

@@ -1940,7 +1940,48 @@ next
 qed
 
 
+lemma Learner_Only_Has_PresentlyWellFormed_Messages:
+  assumes "Spec f"
+  shows "m \<in> set (known_msgs_lrn (f i) L) \<longrightarrow> PresentlyWellFormed (f i) m"
+proof -
+  have i:"KnownMsgs_lrnSpec (f i)"
+    by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+  then show ?thesis
+  proof (induction m)
+    case (M1a x)
+    then show ?case 
+      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
+  next
+    case (M1b x1a x2)
+    then show ?case 
+      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
+  next
+    case (M2a x1a x2 x3)
+    then show ?case 
+      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
+  qed
+qed
 
+
+fun completely_safe_and_present :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
+  "completely_safe_and_present st m = (
+    \<forall>x \<in> Tran m. 
+      (type x = T1a \<or> is_safe (acc x)) \<and>
+      x \<in> set (msgs st))"
+
+lemma completely_safe_and_present_Tran:
+  shows "completely_safe_and_present st m \<longrightarrow> (\<forall>x \<in> Tran m. completely_safe_and_present st x)"
+  by (meson Tran_Tran completely_safe_and_present.simps subsetD)
+
+lemma WellFormed_Spec_2_Invarient:
+  assumes "Spec f"
+  shows "m \<in> set (msgs (f i)) \<and> (type m = T1a \<or> is_safe (acc m)) \<longrightarrow> WellFormed (f i) m"
+  by (metis MessageType.distinct(1) MessageType.distinct(3) WellFormed.elims(1) WellFormed_Spec.elims(2) WellFormed_Spec_Invariant assms isValidMessage.simps(1) type.elims)
+
+lemma completely_safe_then_PresentlyWellFormed:
+  assumes "Spec f"
+  shows "completely_safe_and_present (f i) m \<longrightarrow> PresentlyWellFormed (f i) m"
+  using PresentlyWellFormed.simps WellFormed_Spec_2_Invarient assms completely_safe_and_present.simps by blast
 
 
 
