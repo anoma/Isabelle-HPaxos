@@ -2,31 +2,34 @@ theory hpaxos_liveness
 imports Main hpaxos hpaxos_safety hpaxos_aux
 begin
 
+lemma step_1a:
+  assumes "Spec f"
+      and "Send1a b (f i) (f (1 + i))"
+      and "\<not> Enabled (AcceptorAction a) (f i)"
+      and "\<forall>m \<in> set (known_msgs_acc (f i) a). PresentlyWellFormed (f i) m"
+      and "\<forall>a \<in> Q. \<not> Enabled (AcceptorAction a) (f i)"
+      and "\<forall>a \<in> Q. \<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb \<le> b"
+      and "i < j"
+      and "\<not> Enabled (AcceptorAction a) (f j)"
+      and "\<forall> k. i < k \<and> k < j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
+                                \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))"
+    shows "\<exists>m \<in> set (msgs (f j)). 
+                    acc m = a
+                  \<and> PresentlyWellFormed (f j) m
+                  \<and> (\<forall>a \<in> Q. \<forall> b mb :: Ballot. MaxBal (f j) a mb \<and> B m b \<longrightarrow> mb \<le> b)
+                  \<and> type m = T1b"
+proof -
+  show ?thesis
+    sorry
+qed
+
 fun UnKnown2a_2 :: "State \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> Value \<Rightarrow> PreMessage set" where
   "UnKnown2a_2 st l b v = 
     {x . x \<in> set (msgs st) 
       \<and> type x = T2a 
       \<and> lrn x = l 
       \<and> B x b 
-      \<and> V st x v
-      \<and> PresentlyWellFormed st x  }"
-
-lemma t1b_proccessed:
-  assumes "Spec f"
-      and "\<forall>m \<in> set (recent_msgs (f i) a). PresentlyWellFormed (f i) m"
-      and "{n . n \<in> set (msgs (f i)) \<and> n \<notin> set (known_msgs_acc (f i) a)} \<noteq> {}"
-      and "\<forall>m \<in> {n . n \<in> set (msgs (f i)) \<and> n \<notin> set (known_msgs_acc (f i) a)}. 
-              m \<in> set (msgs (f i)) \<and>
-              type m = T1b \<and>
-              m \<notin> set (known_msgs_acc (f i) a) \<and>
-              PresentlyWellFormed (f i) m \<and>
-              (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)"
-      and "\<not> Enabled (AcceptorAction a) (f j)"
-    shows "\<exists>m \<in> UnKnown2a_2 (f j) L BB v. acc m = a"
-  sorry
-
-
-
+      \<and> V st x v }"
 
 fun Network_Assumption_2 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ballot \<Rightarrow> (nat \<Rightarrow> State) \<Rightarrow> bool" where
   "Network_Assumption_2 Q L BB f = (
@@ -37,8 +40,8 @@ fun Network_Assumption_2 :: "Acceptor set \<Rightarrow> Learner \<Rightarrow> Ba
 
 fun Liveness_2 :: "(nat \<Rightarrow> State) \<Rightarrow> bool" where
   "Liveness_2 f = ( 
-    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set.
-    TrustLive L Q \<longrightarrow> 
+    \<forall> L :: Learner. \<forall> BB :: Ballot. \<forall>Q :: Acceptor set. 
+    (\<forall>a \<in> Q. is_safe a) \<longrightarrow> TrustLive L Q \<longrightarrow> 
     Network_Assumption_2 Q L BB f \<longrightarrow> 
     (\<exists>j. decision (f j) L BB \<noteq> {})
   )"
@@ -55,32 +58,8 @@ proof -
     using BVal_Constant \<open>Spec f\<close> by blast
   then have "UnKnown2a_2 (f i) L BB v \<subseteq> {x . V (f j) x v}"
     by fastforce
-  have "\<forall>x. PresentlyWellFormed (f i) x \<longrightarrow> PresentlyWellFormed (f j) x"
-    using \<open>i \<le> j\<close> \<open>Spec f\<close> PresentlyWellFormed_Constant by blast
-  then have "UnKnown2a_2 (f i) L BB v \<subseteq> {x . PresentlyWellFormed (f j) x}"
-    using UnKnown2a_2.elims by blast
   show ?thesis
-    by (smt (verit) Collect_mono_iff UnKnown2a_2.elims \<open>UnKnown2a_2 (f i) L BB v \<subseteq> set (msgs (f j))\<close> \<open>UnKnown2a_2 (f i) L BB v \<subseteq> {x. PresentlyWellFormed (f j) x}\<close> \<open>UnKnown2a_2 (f i) L BB v \<subseteq> {x. V (f j) x v}\<close> mem_Collect_eq subsetD)
-qed
-
-lemma Network_Assumption_2_0:
-  assumes "Spec f"
-      and "S \<subseteq> UnKnown2a_2 (f i) L BB v"
-      and "j \<ge> i"
-      and "\<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j)"
-      and "TrustLive L (acc ` S)"
-    shows "ChosenIn (f j) L BB v"
-proof -
-  have "\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)"
-    using assms(4) by auto
-  then have "\<forall>m\<in>set (msgs (f j)). \<not> Recv_lrn (f j) L m"
-    by auto
-  have "S \<subseteq> UnKnown2a_2 (f j) L BB v"
-    using UnKnown2a_2_Conserved assms(1) assms(2) assms(3) by blast
-  then have "\<forall>m\<in>S. m \<in> set (known_msgs_lrn (f j) L)"
-    by (smt (verit, best) Learner_Eventually_Gets_All_PresentlyWellFormed_Messages UnKnown2a_2.elims \<open>\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)\<close> assms(1) mem_Collect_eq subsetD)
-  then show ?thesis
-    by (smt (verit) ChosenIn.simps Collect_mem_eq Collect_mono_iff Known2a.simps UnKnown2a_2.elims \<open>S \<subseteq> UnKnown2a_2 (f j) L BB v\<close> assms(5))
+    using \<open>UnKnown2a_2 (f i) L BB v \<subseteq> set (msgs (f j))\<close> \<open>UnKnown2a_2 (f i) L BB v \<subseteq> {x. V (f j) x v}\<close> by auto
 qed
 
 theorem LivenessResult_2 :
@@ -89,7 +68,8 @@ theorem LivenessResult_2 :
   unfolding Liveness_2.simps Network_Assumption_2.simps WF.simps
 proof (clarify)
   fix L BB S i v j
-  assume "TrustLive L (acc ` S)"
+  assume "Ball (acc ` S) is_safe"
+     and "TrustLive L (acc ` S)"
      and h: "\<forall>i. (\<forall>j\<ge>i. Enabled (\<lambda>st st2. \<exists>v. LearnerDecide L BB v st st2) (f j)) \<longrightarrow>
              (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
      and "S \<subseteq> UnKnown2a_2 (f i) L BB v"
@@ -97,8 +77,16 @@ proof (clarify)
      and hh: "\<not> Enabled (\<lambda>st st2. \<exists>m\<in>set (msgs st). LearnerRecv L m st st2) (f j)"
   have "TrustLive L (acc ` S)"
     using \<open>TrustLive L (acc ` S)\<close> by blast
+  have "S \<subseteq> UnKnown2a_2 (f j) L BB v"
+    using UnKnown2a_2_Conserved \<open>S \<subseteq> UnKnown2a_2 (f i) L BB v\<close> \<open>i \<le> j\<close> assms by blast
+  have "\<forall>m\<in>S. m \<in> set (msgs (f j))"
+    using \<open>S \<subseteq> UnKnown2a_2 (f j) L BB v\<close> by auto
+  have "\<forall>m\<in>S. is_safe (acc m)"
+    using \<open>Ball (acc ` S) is_safe\<close> by blast
+  then have "\<forall>m\<in>S. m \<in> set (known_msgs_lrn (f j) L)"
+    by (smt (verit, ccfv_threshold) Enabled.elims(1) Learner_Eventually_Gets_All_Safe_Messages \<open>\<forall>m\<in>S. m \<in> set (msgs (f j))\<close> assms hh)
   then have cha: "ChosenIn (f j) L BB v"
-    using Network_Assumption_2_0 hh \<open>S \<subseteq> UnKnown2a_2 (f i) L BB v\<close> \<open>j \<ge> i\<close> \<open>Spec f\<close> by blast
+    using \<open>S \<subseteq> UnKnown2a_2 (f j) L BB v\<close> \<open>TrustLive L (acc ` S)\<close> by fastforce
   have h0: "\<forall>i. (\<forall>j\<ge>i. (\<exists>v. ChosenIn (f j) L BB v)) \<longrightarrow>
             (\<exists>j\<ge>i. \<exists>v. LearnerDecide L BB v (f j) (f (1 + j)))"
     using h by auto
@@ -118,6 +106,34 @@ proof (clarify)
   qed
 qed
 
+
+
+
+lemma Network_Assumption_2_0:
+  assumes "Spec f"
+      and "S \<subseteq> UnKnown2a_2 (f i) L BB v"
+      and "j \<ge> i"
+      and "\<not> Enabled (\<lambda>st st2. \<exists>m \<in> set (msgs st). LearnerRecv L m st st2) (f j)"
+      and "TrustLive L (acc ` S)"
+    shows "ChosenIn (f j) L BB v"
+proof -
+  have "\<forall>m\<in>set (msgs (f j)). \<not> Enabled (LearnerRecv L m) (f j)"
+    using assms(4) by auto
+  then have "\<forall>m\<in>set (msgs (f j)). \<not> Recv_lrn (f j) L m"
+    by auto
+  have "S \<subseteq> UnKnown2a_2 (f j) L BB v"
+    using UnKnown2a_2_Conserved assms(1) assms(2) assms(3) by blast
+  have "is_quorum (acc ` S)"
+    using TrustLiveAssumption assms(5) by blast
+  then have "\<forall>a \<in> acc ` S. is_safe a"
+    sledgehammer
+  then have "\<forall>m \<in> S. is_safe (acc m)"
+    sorry
+  then have "\<forall>m\<in>S. m \<in> set (known_msgs_lrn (f j) L)"
+    sorry
+  then show ?thesis
+    by (smt (verit) ChosenIn.simps Collect_mem_eq Collect_mono_iff Known2a.simps UnKnown2a_2.elims \<open>S \<subseteq> UnKnown2a_2 (f j) L BB v\<close> assms(5))
+qed
 
 
 

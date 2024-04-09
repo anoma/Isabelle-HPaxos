@@ -1816,6 +1816,11 @@ theorem KnownMsgs_accSpecResult :
   shows "\<forall>n. KnownMsgs_accSpec (f n)"
   by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
 
+theorem KnownMsgs_lrnSpecResult :
+  assumes "Spec f"
+  shows "\<forall>n. KnownMsgs_lrnSpec (f n)"
+  by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
+
 theorem QueuedMsgResult :
   assumes "Spec f"
   shows "\<forall>n. QueuedMsgSpec1 (f n)"

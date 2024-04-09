@@ -491,13 +491,13 @@ fun Process1a :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
 fun Process1b :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
   "Process1b a m st st2 = (
     type m = T1b
-    \<and> Recv_acc st a m
+    \<and> Recv_acc st a m         
     \<and> Store_acc a m st st2
     \<and> recent_msgs st2 = (
         \<lambda>x. if x = a 
             then m # recent_msgs st x
             else recent_msgs st x )
-    \<and> ((\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
+    \<and> ((\<forall> mb b :: Ballot. MaxBal st a mb \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
         two_a_lrn_loop st2 = (\<lambda>x.
           if x = a
           then True
@@ -507,7 +507,7 @@ fun Process1b :: "Acceptor \<Rightarrow> PreMessage \<Rightarrow> State \<Righta
           then {}
           else processed_lrns st x)
       )
-    \<and> (\<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
+    \<and> (\<not> (\<forall> mb b :: Ballot. MaxBal st a mb \<and> B m b \<longrightarrow> mb \<le> b) \<longrightarrow>
         two_a_lrn_loop st2 = two_a_lrn_loop st
         \<and> processed_lrns st2 = processed_lrns st
       )

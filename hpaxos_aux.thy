@@ -821,6 +821,135 @@ next
     by (metis PreSafetyResult QueuedMsgSpecInvariant2 Spec.elims(2) assms)
 qed
 
+
+
+fun QueuedMsgSpec3 :: "State \<Rightarrow> bool" where
+  "QueuedMsgSpec3 st = (
+    \<forall>a :: Acceptor. is_safe a \<and> queued_msg st a \<noteq> None \<longrightarrow> 
+      WellFormed st (the (queued_msg st a))
+  )"
+
+
+lemma QueuedMsgSpecInvariant3 :
+  assumes "QueuedMsgSpec3 st"
+      and "Next st st2"
+      and "FullSafetyInvariant st"
+  shows "QueuedMsgSpec3 st2"
+  unfolding QueuedMsgSpec3.simps
+proof (clarify)
+  fix a y
+  assume "is_safe a"
+     and "queued_msg st2 a = Some y"
+  have h: "queued_msg st a = queued_msg st2 a \<longrightarrow> WellFormed st2 (the (queued_msg st2 a))"
+    by (metis QueuedMsgSpec3.elims(2) Wellformed_Conservation_Next \<open>is_safe a\<close> \<open>queued_msg st2 a = Some y\<close> assms(1) assms(2) option.discI)
+  have css: "ProposerSendAction st st2 \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                            \<and> queued_msg st A = None 
+                            \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A \<noteq> None 
+                              \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A = None 
+                              \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> Process1bLearnerLoopDone A st st2) \<or>
+                LearnerProcessAction st st2 \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend1b A st st2) \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend2a A st st2)
+                "
+                using assms next_split by presburger
+    then show "WellFormed st2 (the (queued_msg st2 a))"
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        by (metis ProposerSendAction.elims(2) Send1a.elims(2) h ext_inject surjective update_convs(1))
+    next
+      assume "\<exists>A. is_safe A \<and>
+                queued_msg st A = None \<and>
+                (\<exists>m\<in>set (msgs st).
+                    Process1a A m st st2)"
+      then show ?thesis
+        by (smt (verit) Process1a.elims(2) Wellformed_Conservation_Next assms(2) h option.sel)
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+      proof (clarify)
+        fix A y2
+        assume "is_safe A"
+           and "Process1b A (the (queued_msg st A)) st st2"
+           and "queued_msg st A = Some y2"
+        have "A \<noteq> a"
+          by (metis Process1b.elims(2) \<open>Process1b A (the (queued_msg st A)) st st2\<close> \<open>queued_msg st2 a = Some y\<close> option.discI)
+        then show "WellFormed st2 (the (queued_msg st2 a))"
+          using Process1b.simps \<open>Process1b A (the (queued_msg st A)) st st2\<close> h by presburger          
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+      proof (clarify)
+        fix A m
+        assume "is_safe A"
+           and "queued_msg st A = None"
+           and "m \<in> set (msgs st)"
+           and "Process1b A m st st2"
+        have "A \<noteq> a"
+          by (metis Process1b.elims(2) \<open>Process1b A m st st2\<close> \<open>queued_msg st2 a = Some y\<close> domI domIff)
+        show ?thesis
+          by (metis Process1b.elims(2) \<open>A \<noteq> a\<close> \<open>Process1b A m st st2\<close> h)
+      qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+          by (metis Process1bLearnerLoopStep.elims(2) h)
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+          by (smt (z3) Process1bLearnerLoopDone.elims(1) ext_inject h surjective update_convs(6))
+    next
+      assume "LearnerProcessAction st st2"
+      then show ?thesis
+        by (smt (verit) LearnerAction.elims(2) LearnerDecide.elims(2) LearnerProcessAction.elims(1) LearnerRecv.elims(2) ext_inject h surjective update_convs(3) update_convs(8))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      show ?thesis
+        by (metis FakeSend1b.simps \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> h select_convs(5) surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      then show ?thesis
+        by (metis FakeSend2a.simps ext_inject h surjective update_convs(1))
+    qed
+qed
+
+lemma QueuedMsgSpec3_Conserved:
+  assumes "Spec f"
+    shows "QueuedMsgSpec3 (f i)"
+proof (induction i)
+  case 0
+  then show ?case 
+    by (metis QueuedMsgSpec2.elims(2) QueuedMsgSpec2_Conserved QueuedMsgSpec3.elims(1) Recv_acc.elims(2) assms)
+next
+  case (Suc j)
+  then show ?case
+    by (metis PreSafetyResult QueuedMsgSpecInvariant3 Spec.elims(2) assms)
+qed
+
+
+
 lemma BVal_Doesnt_Change:
   assumes "Next st st2"
   shows "BVal st = BVal st2"
@@ -1508,7 +1637,7 @@ lemma Process1a_Trans:
   by (metis MessageType.distinct(1) MessageType.distinct(3) Process1a_Enabled Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) assms(1) assms(2) empty_iff ref.simps(1) type.elims)
 
 lemma Process1bAlt1:
-  assumes "\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b"
+  assumes "\<forall> mb b :: Ballot. MaxBal st a mb \<and> B m b \<longrightarrow> mb \<le> b"
       and "type m = T1b"
       and "Recv_acc st a m"
     shows "Process1b a m st (st\<lparr>recent_msgs := (
@@ -1578,7 +1707,7 @@ proof -
 qed
 
 lemma Process1bAlt2:
-  assumes "\<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)"
+  assumes "\<not> (\<forall> mb b :: Ballot. MaxBal st a mb \<and> B m b \<longrightarrow> mb \<le> b)"
       and "type m = T1b"
       and "Recv_acc st a m"
     shows "Process1b a m st (st\<lparr>recent_msgs := (
@@ -1943,47 +2072,204 @@ qed
 lemma Learner_Only_Has_PresentlyWellFormed_Messages:
   assumes "Spec f"
   shows "m \<in> set (known_msgs_lrn (f i) L) \<longrightarrow> PresentlyWellFormed (f i) m"
-proof -
-  have i:"KnownMsgs_lrnSpec (f i)"
-    by (meson FullSafetyInvariant.elims(2) PreSafetyResult assms)
-  then show ?thesis
-  proof (induction m)
-    case (M1a x)
-    then show ?case 
-      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
-  next
-    case (M1b x1a x2)
-    then show ?case 
-      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
-  next
-    case (M2a x1a x2 x3)
-    then show ?case 
-      by (meson KnownMsgs_lrnSpec.elims(2) PresentlyWellFormed.simps in_mono)
-  qed
+  by (meson KnownMsgs_lrnSpecResult KnownMsgs_lrnSpec.elims(2) PreSafetyResult PresentlyWellFormed.simps assms subsetD)
+
+lemma Acceptor_Only_Has_PresentlyWellFormed_Messages:
+  assumes "Spec f"
+      and "is_safe a"
+  shows "m \<in> set (known_msgs_acc (f i) a) \<longrightarrow> PresentlyWellFormed (f i) m"
+  by (meson KnownMsgs_accSpecResult KnownMsgs_accSpec.elims(2) PreSafetyResult PresentlyWellFormed.simps assms subsetD)
+
+lemma Acceptor_Only_Has_PresentlyWellFormed_Recent_Messages:
+  assumes "Spec f"
+      and "is_safe a"
+  shows "m \<in> set (recent_msgs (f i) a) \<longrightarrow> PresentlyWellFormed (f i) m"
+  by (meson Acceptor_Only_Has_PresentlyWellFormed_Messages RecentMsgsSpec.elims(2) RecentMsgsSpecResult assms(1) assms(2) subsetD)
+
+lemma PresentlyWellFormed_From_ref:
+  shows "(\<forall>x\<in>ref m. PresentlyWellFormed st x) \<and> 
+         WellFormed st m \<and> 
+         m \<in> set (msgs st) \<longrightarrow> 
+         PresentlyWellFormed st m"
+proof (induction m)
+  case (M1a x)
+  then show ?case 
+    by (metis PresentlyWellFormed.elims(1) Tran.simps(1) singletonD)
+next
+  case (M1b x1a x2)
+  then show ?case 
+    unfolding PresentlyWellFormed.simps Tran.simps ref.simps
+    by fastforce
+next
+  case (M2a x1a x2 x3)
+  then show ?case
+    unfolding PresentlyWellFormed.simps Tran.simps ref.simps
+    by fastforce
 qed
 
+fun PresentlyWellFormed_Spec :: "State \<Rightarrow> bool" where
+  "PresentlyWellFormed_Spec st =
+    (\<forall>m \<in> set (msgs st). is_safe (acc m) \<longrightarrow> PresentlyWellFormed st m)"
 
-fun completely_safe_and_present :: "State \<Rightarrow> PreMessage \<Rightarrow> bool" where
-  "completely_safe_and_present st m = (
-    \<forall>x \<in> Tran m. 
-      (type x = T1a \<or> is_safe (acc x)) \<and>
-      x \<in> set (msgs st))"
+lemma All_Safe_Messages_PresentlyWellFormed_Next:
+  assumes "Next st st2"
+      and "KnownMsgs_accSpec st"
+      and "RecentMsgsSpec st"
+      and "PresentlyWellFormed_Spec st"
+    shows "PresentlyWellFormed_Spec st2"
+proof -
+  have h1: "{x . x \<in> set (msgs st) \<and> is_safe (acc x)} = {x . x \<in> set (msgs st2) \<and> is_safe (acc x)}
+            \<longrightarrow> PresentlyWellFormed_Spec st2"
+    by (smt (z3) PresentlyWellFormed.elims(1) PresentlyWellFormed_Spec.elims(1) Wellformed_Conservation_Next assms(1) assms(4) mem_Collect_eq next_msgs_preserved)
+  have css: "ProposerSendAction st st2 \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                            \<and> queued_msg st A = None 
+                            \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A \<noteq> None 
+                              \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> queued_msg st A = None 
+                              \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+                (\<exists>A :: Acceptor. is_safe A
+                              \<and> two_a_lrn_loop st A 
+                              \<and> Process1bLearnerLoopDone A st st2) \<or>
+                LearnerProcessAction st st2 \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend1b A st st2) \<or>
+                (\<exists>A :: Acceptor. \<not> (is_safe A)
+                              \<and> FakeSend2a A st st2)
+                "
+                using assms next_split by presburger
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        by (smt (verit) MessageType.distinct(3) PresentlyWellFormed.elims(1) PresentlyWellFormed_Spec.elims(1) ProposerSendAction.elims(2) Send1a.elims(2) Tran.simps(1) WellFormed.elims(3) Wellformed_Conservation_Next assms(1) assms(4) insert_Diff isValidMessage.simps(1) next_msgs_preserved select_convs(1) set_ConsD singleton_insert_inj_eq surjective type.simps(1) update_convs(1))
+    next
+      assume "\<exists>A. is_safe A \<and>
+                queued_msg st A = None \<and>
+                (\<exists>m\<in>set (msgs st).
+                    Process1a A m st st2)"
+      then show ?thesis
+        proof (clarify)
+        fix m A
+        assume "is_safe A"
+           and "queued_msg st A = None"
+           and "m \<in> set (msgs st)"
+           and "Process1a A m st st2"
+        define new1b where "new1b = M1b A (m # recent_msgs st A)"
+        show "PresentlyWellFormed_Spec st2"
+        proof (cases "WellFormed st new1b")
+          case True
+          have "PresentlyWellFormed st m"
+            by (metis MessageType.distinct(1) MessageType.distinct(3) PresentlyWellFormed.elims(1) Process1a.elims(2) Recv_acc.elims(2) Tran.simps(1) \<open>Process1a A m st st2\<close> \<open>m \<in> set (msgs st)\<close> singletonD type.elims)
+          then have "PresentlyWellFormed st2 m"
+            using PresentlyWellFormed.simps Wellformed_Conservation_Next assms(1) next_msgs_preserved by blast
+          have "\<forall>m \<in> set (recent_msgs st A). PresentlyWellFormed st m" 
+            by (metis KnownMsgs_accSpec.elims(2) PresentlyWellFormed.simps RecentMsgsSpec.simps \<open>is_safe A\<close> assms(2) assms(3) in_mono)
+          then have "\<forall>m \<in> set (recent_msgs st A). PresentlyWellFormed st2 m"
+            using PresentlyWellFormed.simps Wellformed_Conservation_Next assms(1) next_msgs_preserved by blast
+          have "\<forall>x\<in>ref new1b. PresentlyWellFormed st2 x"
+            by (metis \<open>PresentlyWellFormed st2 m\<close> \<open>\<forall>m\<in>set (recent_msgs st A). PresentlyWellFormed st2 m\<close> new1b_def ref.simps(2) set_ConsD)
+          have "PresentlyWellFormed st2 new1b"
+            by (metis PresentlyWellFormed_From_ref Process1a.elims(2) Send.elims(2) True Wellformed_Conservation_Next \<open>Process1a A m st st2\<close> \<open>\<forall>x\<in>ref new1b. PresentlyWellFormed st2 x\<close> assms(1) in_set_member member_rec(1) new1b_def)
+          show ?thesis
+            by (smt (verit) PresentlyWellFormed.elims(1) PresentlyWellFormed_Spec.elims(1) Process1a.elims(2) Send.elims(2) WellFormed_monotone \<open>PresentlyWellFormed st2 new1b\<close> \<open>Process1a A m st st2\<close> assms(4) list.set_intros(2) new1b_def set_ConsD)
+        next
+          case False
+          then show ?thesis
+          proof -
+            have "msgs st2 = msgs st"
+              by (smt (z3) False Process1a.simps \<open>Process1a A m st st2\<close> new1b_def)
+            then show ?thesis
+              using h1 by presburger
+          qed
+       qed
+     qed
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+        by (metis (no_types) Process1b.elims(2) h1)
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+        by (metis (no_types) Process1b.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1b A m st st2)\<close> h1)
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+      proof (clarify)
+        fix A l
+        assume "is_safe A"
+           and "two_a_lrn_loop st A"
+           and "Process1bLearnerLoopStep A l st st2"
+        define new2a where "new2a = M2a l A (recent_msgs st A)"
+        then show ?thesis
+        proof (cases "WellFormed st new2a")
+          case True
+          have "\<forall>m \<in> set (recent_msgs st A). PresentlyWellFormed st m" 
+            by (metis KnownMsgs_accSpec.elims(2) PresentlyWellFormed.simps RecentMsgsSpec.simps \<open>is_safe A\<close> assms(2) assms(3) in_mono)
+          then have "\<forall>m \<in> set (recent_msgs st A). PresentlyWellFormed st2 m"
+            using PresentlyWellFormed.simps Wellformed_Conservation_Next assms(1) next_msgs_preserved by blast
+          then have "\<forall>x\<in>ref new2a. PresentlyWellFormed st2 x"
+            using new2a_def ref.simps(3) by presburger
+          then have "PresentlyWellFormed st2 new2a"
+            by (metis PresentlyWellFormed_From_ref Process1bLearnerLoopStep.elims(2) Send.elims(2) True Wellformed_Conservation_Next \<open>Process1bLearnerLoopStep A l st st2\<close> assms(1) list.set_intros(1) new2a_def)
+          then show ?thesis
+            by (smt (verit) PresentlyWellFormed.elims(1) PresentlyWellFormed_Spec.elims(1) Process1bLearnerLoopStep.elims(2) Send.elims(2) Wellformed_Conservation_Next \<open>Process1bLearnerLoopStep A l st st2\<close> assms(1) assms(4) new2a_def next_msgs_preserved set_ConsD)
+        next
+          case False
+          then show ?thesis 
+            by (metis (no_types, lifting) Collect_cong Process1bLearnerLoopStep.elims(2) \<open>Process1bLearnerLoopStep A l st st2\<close> h1 new2a_def)
+        qed
+      qed
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+        by (metis (mono_tags, lifting) Collect_cong Process1bLearnerLoopDone.elims(1) h1 select_convs(1) surjective update_convs(6))
+    next
+      assume "LearnerProcessAction st st2"
+      then show ?thesis
+        by (smt (verit) Collect_cong LearnerAction.elims(2) LearnerDecide.elims(2) LearnerProcessAction.elims(1) LearnerRecv.elims(2) ext_inject h1 surjective update_convs(3) update_convs(8))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      then show ?thesis
+        by (smt (z3) Collect_cong FakeSend1b.elims(1) assms(1) h1 hpaxos.acc.simps(2) next_msgs_preserved select_convs(1) set_ConsD surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+      then show ?thesis
+        by (smt (verit, best) Collect_cong FakeSend2a.simps h1 hpaxos.acc.simps(3) in_set_member member_rec(1) select_convs(1) surjective update_convs(1))
+    qed
+qed
 
-lemma completely_safe_and_present_Tran:
-  shows "completely_safe_and_present st m \<longrightarrow> (\<forall>x \<in> Tran m. completely_safe_and_present st x)"
-  by (meson Tran_Tran completely_safe_and_present.simps subsetD)
-
-lemma WellFormed_Spec_2_Invarient:
+lemma All_Safe_Messages_PresentlyWellFormed:
   assumes "Spec f"
-  shows "m \<in> set (msgs (f i)) \<and> (type m = T1a \<or> is_safe (acc m)) \<longrightarrow> WellFormed (f i) m"
-  by (metis MessageType.distinct(1) MessageType.distinct(3) WellFormed.elims(1) WellFormed_Spec.elims(2) WellFormed_Spec_Invariant assms isValidMessage.simps(1) type.elims)
+  shows "PresentlyWellFormed_Spec (f i)"
+proof (induction i)
+  case 0
+  then show ?case
+    by (metis Init.elims PresentlyWellFormed_Spec.elims(1) Spec.simps assms ball_empty empty_set select_convs(1))
+next
+  case (Suc i)
+  then show ?case 
+    by (metis All_Safe_Messages_PresentlyWellFormed_Next KnownMsgs_accSpecResult RecentMsgsSpecResult Spec.elims(2) assms)
+qed
 
-lemma completely_safe_then_PresentlyWellFormed:
+lemma Learner_Eventually_Gets_All_Safe_Messages:
   assumes "Spec f"
-  shows "completely_safe_and_present (f i) m \<longrightarrow> PresentlyWellFormed (f i) m"
-  using PresentlyWellFormed.simps WellFormed_Spec_2_Invarient assms completely_safe_and_present.simps by blast
-
-
-
+      and "\<forall>m\<in>set (msgs (f i)). \<not> Enabled (LearnerRecv L m) (f i)"
+    shows "\<forall>m\<in>set (msgs (f i)). is_safe (acc m) \<longrightarrow> m \<in> set (known_msgs_lrn (f i) L)"
+  by (meson All_Safe_Messages_PresentlyWellFormed Learner_Eventually_Gets_All_PresentlyWellFormed_Messages PresentlyWellFormed_Spec.elims(2) assms(1) assms(2))
 
 end
