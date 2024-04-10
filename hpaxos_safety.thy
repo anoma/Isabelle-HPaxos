@@ -422,10 +422,20 @@ proof -
       assume h: "x \<in> set (msgs st2)"
       assume "FakeSend1b a st st2 \<or> FakeSend2a a st st2"
       then show "isValidMessage x"
-        by (smt (verit) FakeSend1b.simps FakeSend2a.simps TypeOK.simps WellFormed.elims(1) assms(1) h set_ConsD simps(1) surjective update_convs(1))
-    next 
+      proof (elim disjE)
+        assume "FakeSend1b a st st2"
+        then show ?thesis 
+          unfolding FakeSend1b.simps
+          by (metis (no_types, lifting) TypeOK.elims(1) WellFormed.elims(1) assms(1) h select_convs(1) set_ConsD surjective update_convs(1))
+      next
+        assume "FakeSend2a a st st2"
+        then show ?thesis
+          unfolding FakeSend2a.simps
+          by (metis (no_types, lifting) TypeOK.elims(1) WellFormed.elims(1) assms(1) h select_convs(1) set_ConsD surjective update_convs(1))
+      qed
+    next
       fix a x
-      assume h: "x \<in> set (known_msgs_acc st2 a)"
+      assume h: "x \<in> set (known_msgs_acc (full_types)st2 a)"
       show "isValidMessage x"
         by (metis FakeAcceptorAction.elims(2) FakeSend1b.simps FakeSend2a.simps TypeOK.elims(2) \<open>FakeAcceptorAction st st2\<close> assms(1) h select_convs(2) surjective update_convs(1))
     next

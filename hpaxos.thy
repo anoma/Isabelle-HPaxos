@@ -206,7 +206,7 @@ fun Get1a :: "PreMessage \<Rightarrow> Ballot" where
   "Get1a m = Max {a . M1a a \<in> Tran m}"
 
 fun B :: "PreMessage \<Rightarrow> Ballot \<Rightarrow> bool" where
-  "B m blt = (blt = Get1a m)"
+  "B m blt = (M1a blt \<in> Tran m \<and> (\<forall>b. M1a b \<in> Tran m \<longrightarrow> b \<le> blt))"
 
 record State =
   msgs :: "PreMessage list"
@@ -240,8 +240,8 @@ fun V :: "State \<Rightarrow> PreMessage \<Rightarrow> Value \<Rightarrow> bool"
 
 (*Maximal bltlot number of any messages known to acceptor a*)
 (* Direct translation (not used) *)
-fun MaxBalL :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> bool" where
-  "MaxBalL st a mblt = 
+fun MaxBal :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "MaxBal st a mblt = 
       ((\<exists> m \<in> set (known_msgs_acc st a). B m mblt)
       \<and> (\<forall> x \<in> set (known_msgs_acc st a).
           \<forall> b :: Ballot. B x b \<longrightarrow> b \<le> mblt))"
@@ -252,15 +252,17 @@ fun MaxBalO :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot option" where
     (if known_msgs_acc st a = [] then None else
      Some (Max (Get1a ` set (known_msgs_acc st a))))"
 
-fun MaxBal :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> bool" where
-  "MaxBal st a mblt = (Some mblt = MaxBalO st a)"
+fun MaxBalL :: "State \<Rightarrow> Acceptor \<Rightarrow> Ballot \<Rightarrow> bool" where
+  "MaxBalL st a mblt = (Some mblt = MaxBalO st a)"
 
 fun SameBallot :: "PreMessage \<Rightarrow> PreMessage \<Rightarrow> bool" where
   "SameBallot x y = (\<forall> b. B x b = B y b)"
 
+(*
 lemma SameBallot2:
   shows "SameBallot x y = (Get1a x = Get1a y)"
-  by auto
+  sorry
+*)
 
 (*
 The acceptor is _caught_ in a message x if the transitive references of x

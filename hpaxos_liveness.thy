@@ -1,12 +1,94 @@
 theory hpaxos_liveness
-imports Main hpaxos hpaxos_safety hpaxos_aux
+imports Main  hpaxos hpaxos_safety hpaxos_aux hpaxos_time
 begin
+
+lemma step_1a_then:
+  assumes "Spec f"
+      and "Send1a b (f i) (f (1 + i))"
+      and "\<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb < b"
+      and "is_safe a"
+    shows "M1a b \<in> set (msgs (f (1 + i)))"
+      and "Enabled (AcceptorAction a) (f (1 + i))"
+      and "\<forall> mb :: Ballot. MaxBal (f (1 + i)) a mb \<longrightarrow> mb < b"
+proof -
+  show "M1a b \<in> set (msgs (f (1 + i)))"
+    using assms(2) by fastforce
+next
+  have "(M1a b) \<in> set (msgs (f (1 + i)))"
+    using assms(2) by auto
+  have "M1a b \<notin> set (known_msgs_acc (f i) a)"
+    by (metis B_1a assms(3) bal.simps(1) maxbal_absence type.simps(1))
+  then have "M1a b \<notin> set (known_msgs_acc (f (1 + i)) a)"
+    using assms(2) by auto
+  then have "Recv_acc (f (1 + i)) a (M1a b)"
+    by simp
+  then have "\<exists>m \<in> set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)"
+    using \<open>M1a b \<in> set (msgs (f (1 + i)))\<close> type.simps(1) by blast
+  then show "Enabled (AcceptorAction a) (f (1 + i))"
+    using AcceptorAction_NotEnabled_Spec assms(1) assms(4) by presburger
+next
+  show "\<forall> mb :: Ballot. MaxBal (f (1 + i)) a mb \<longrightarrow> mb < b"
+    using assms(2) assms(3) by force
+qed
+
+lemma from_1a_to_disabled:
+  assumes "Spec f"
+      and "M1a b \<in> set (msgs (f i))"
+      and "Enabled (AcceptorAction a) (f i)"
+      and "M1a b \<notin> set (known_msgs_acc (f i) a)"
+    shows "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j)
+           \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+proof (induction j)
+  case 0
+  then show ?case
+    by (metis Init.simps Spec.elims(2) assms(1) assms(2) empty_iff empty_set le_zero_eq select_convs(1))
+next
+  case (Suc j)
+  assume "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow>
+          (\<exists>k\<ge>i. k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+  then show "i \<le> Suc j \<and> \<not> Enabled (AcceptorAction a) (f (Suc j)) \<longrightarrow>
+               (\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+  proof (cases "Enabled (AcceptorAction a) (f j)"; clarify)
+    case True
+    assume "i \<le> Suc j"
+       and "\<not> Enabled (AcceptorAction a) (f (Suc j))"
+    then show "\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
+      sorry
+  next
+    case False
+    assume "i \<le> Suc j"
+       and "\<not> Enabled (AcceptorAction a) (f (Suc j))"
+    have "i \<noteq> Suc j"
+      using \<open>\<not> Enabled (AcceptorAction a) (f (Suc j))\<close> assms(3) by blast
+    then show "\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
+      by (meson False \<open>i \<le> Suc j\<close> \<open>i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow> (\<exists>k\<ge>i. k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))\<close> le_SucE less_Suc_eq)
+  qed
+qed
+
 
 lemma step_1a:
   assumes "Spec f"
       and "Send1a b (f i) (f (1 + i))"
+      and "is_safe a"
       and "\<not> Enabled (AcceptorAction a) (f i)"
-      and "\<forall>m \<in> set (known_msgs_acc (f i) a). PresentlyWellFormed (f i) m"
+      and "i < j"
+      and "\<not> Enabled (AcceptorAction a) (f j)"
+      and "\<forall> k. i < k \<and> k < j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
+                                \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))"
+    shows "\<exists>m \<in> set (msgs (f j)). 
+                    acc m = a
+                  \<and> type m = T1b
+                  \<and> B m b"
+proof -
+  show ?thesis
+    sorry
+qed
+
+lemma step_1aa:
+  assumes "Spec f"
+      and "Send1a b (f i) (f (1 + i))"
+      and "\<not> Enabled (AcceptorAction a) (f i)"
       and "\<forall>a \<in> Q. \<not> Enabled (AcceptorAction a) (f i)"
       and "\<forall>a \<in> Q. \<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb \<le> b"
       and "i < j"

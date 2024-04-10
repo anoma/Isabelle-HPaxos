@@ -2272,4 +2272,59 @@ lemma Learner_Eventually_Gets_All_Safe_Messages:
     shows "\<forall>m\<in>set (msgs (f i)). is_safe (acc m) \<longrightarrow> m \<in> set (known_msgs_lrn (f i) L)"
   by (meson All_Safe_Messages_PresentlyWellFormed Learner_Eventually_Gets_All_PresentlyWellFormed_Messages PresentlyWellFormed_Spec.elims(2) assms(1) assms(2))
 
+
+lemma max_bal_decomp_Tran:
+  shows "\<forall>mb. B m mb \<longrightarrow> (\<forall>x \<in> Tran m. \<forall>xb. B x xb \<longrightarrow> xb \<le> mb)"
+  by (meson B.simps Tran_Tran subsetD)
+
+lemma max_bal_decomp_ref:
+  shows "\<forall>mb. B m mb \<longrightarrow> (\<forall>x \<in> ref m. \<forall>xb. B x xb \<longrightarrow> xb \<le> mb)"
+  using Message_ref_Tran max_bal_decomp_Tran by blast
+
+lemma max_bal_decomp_list:
+  shows "(\<forall> mb :: Ballot. (
+          (\<exists> m \<in> set L. B m mb) \<and>
+          (\<forall> x \<in> set L. \<forall> b :: Ballot. B x b \<longrightarrow> b \<le> mb)) \<longrightarrow> mb \<le> b) \<longrightarrow> 
+         (\<forall>m \<in> set L. \<forall>mb. B m mb \<longrightarrow> mb \<le> b)"
+proof (induction L)
+  case Nil
+  then show ?case 
+    by auto
+next
+  case (Cons a l)
+  then show ?case 
+    by (smt (verit) B.simps le_trans list.set_intros(2) nat_le_linear set_ConsD)
+qed
+
+lemma max_bal_decomp_list_lt:
+  shows "(\<forall> mb :: Ballot. (
+          (\<exists> m \<in> set L. B m mb) \<and>
+          (\<forall> x \<in> set L. \<forall> b :: Ballot. B x b \<longrightarrow> b \<le> mb)) \<longrightarrow> mb < b) \<longrightarrow> 
+         (\<forall>m \<in> set L. \<forall>mb. B m mb \<longrightarrow> mb < b)"
+proof (induction L)
+  case Nil
+  then show ?case 
+    by auto
+next
+  case (Cons a l)
+  then show ?case 
+    by (smt (verit, del_insts) max_bal_decomp_list nat_less_le)
+qed
+
+lemma max_bal_decomp_list_absence:
+  shows "(\<forall> mb :: Ballot. (
+          (\<exists> m \<in> set L. B m mb) \<and>
+          (\<forall> x \<in> set L. \<forall> b :: Ballot. B x b \<longrightarrow> b \<le> mb)) \<longrightarrow> mb < b) \<longrightarrow> 
+         B m b \<longrightarrow> m \<notin> set L"
+  using max_bal_decomp_list_lt by blast
+
+lemma maxbal_absence:
+  shows "(\<forall> mb :: Ballot. MaxBal st a mb \<longrightarrow> mb < b) \<longrightarrow> 
+         B m b \<longrightarrow> m \<notin> set (known_msgs_acc st a)"
+  unfolding MaxBal.simps
+using max_bal_decomp_list_absence by blast
+
+
+
+
 end
