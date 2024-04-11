@@ -1545,6 +1545,11 @@ lemma Exists_Enabled_Swap:
   shows "Enabled (\<lambda>st st2. \<exists>v. R v st st2) s = (\<exists>v. Enabled (R v) s)"  
   by auto
 
+lemma Disabled_No_Step:
+  assumes "\<not> (Enabled R st)"
+  shows "\<not> (R st st2)"
+  using assms by auto
+
 (* Send1a is always enabled.*)
 lemma Send1a_Enabled:
   shows "Enabled (Send1a b) st = True"

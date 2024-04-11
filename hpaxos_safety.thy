@@ -435,7 +435,7 @@ proof -
       qed
     next
       fix a x
-      assume h: "x \<in> set (known_msgs_acc (full_types)st2 a)"
+      assume h: "x \<in> set (known_msgs_acc st2 a)"
       show "isValidMessage x"
         by (metis FakeAcceptorAction.elims(2) FakeSend1b.simps FakeSend2a.simps TypeOK.elims(2) \<open>FakeAcceptorAction st st2\<close> assms(1) h select_convs(2) surjective update_convs(1))
     next
@@ -875,6 +875,26 @@ proof (clarify)
   qed
 qed
 
+
+lemma Acceptor_split:
+  assumes "AcceptorProcessAction st st2"
+  shows "(\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2)"
+  by (metis AcceptorAction.elims(2) AcceptorProcessAction.elims(2) Process1bLearnerLoop.elims(2) assms)
+
 lemma next_split:
   assumes "Next st st2"
   shows "ProposerSendAction st st2 \<or>
@@ -1295,8 +1315,14 @@ proof (clarify)
           by (smt (verit) KnownMsgs_accSpec.elims(2) Process1b.simps Proper_acc.elims(2) Proper_acc.elims(3) Recv_acc.elims(2) Store_acc.elims(2) \<open>M \<in> set (known_msgs_acc st2 AL)\<close> \<open>is_safe AL\<close> \<open>is_safe acc \<and> queued_msg st acc \<noteq> None \<and> Process1b acc (the (queued_msg st acc)) st st2\<close> assms(3) list.set_intros(2) set_ConsD)
         have h1: "Tran M \<subseteq> set (known_msgs_acc st2 AL)"
           by (smt (verit, ccfv_threshold) KnownMsgs_accSpec.elims(2) Process1b.simps Proper_acc.elims(2) Recv_acc.elims(2) Store_acc.elims(2) Tran_eq UN_E Un_iff \<open>M \<in> set (known_msgs_acc st2 AL)\<close> \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> \<open>is_safe AL\<close> assms(3) in_set_member member_rec(1) singletonD subset_eq)
+        have h2: "WellFormed st2 M"
+          by (smt (verit) KnownMsgs_accSpec.elims(2) Process1b.simps Recv_acc.elims(2) Store_acc.elims(2) WellFormed_monotone \<open>M \<in> set (known_msgs_acc st2 AL)\<close> \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> \<open>is_safe AL\<close> assms(3) set_ConsD)
+        have "\<forall>m. m \<in> set (known_msgs_acc st2 AL) \<longrightarrow> m \<in> set (msgs st2)"
+          by (smt (z3) KnownMsgs_accSpec.simps Process1b.simps QueuedMsgSpec1.simps Store_acc.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> \<open>is_safe AL\<close> assms(2) assms(3) set_ConsD)
+        have "M \<in> set (msgs st2)"
+          using \<open>M \<in> set (known_msgs_acc st2 AL)\<close> \<open>\<forall>m. m \<in> set (known_msgs_acc st2 AL) \<longrightarrow> m \<in> set (msgs st2)\<close> by blast
         then show ?thesis
-          sorry
+          using h0 h1 h2 by blast
       qed
     next
       assume "\<exists>A :: Acceptor. is_safe A

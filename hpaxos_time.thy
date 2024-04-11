@@ -1059,7 +1059,19 @@ proof -
     by (meson AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>\<exists>m\<in>set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)\<close> \<open>queued_msg (f (1 + i)) a = None\<close> qa)
 qed
 
-lemma Preserves_AcceptorAction_Disabled_Three_Cases:
+
+fun three_cases :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "three_cases a st st2 = (
+           (\<exists>m. Process1a a m st st2 
+              \<and> \<not> WellFormed st (M1b a (m # recent_msgs st a)) 
+              \<and> \<not> (\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
+           (\<exists>m. Process1b a m st st2 
+              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)
+              \<and> \<not> (\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
+           (Process1bLearnerLoopDone a st st2 
+              \<and> \<not> (\<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b))))"
+
+lemma Preserves_AcceptorAction_Disabled_Three_Cases_Pre:
   assumes "Spec f"
       and "Enabled (AcceptorAction a) (f i)"
       and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
@@ -1094,6 +1106,13 @@ proof -
   qed
 qed
 
+lemma Preserves_AcceptorAction_Disabled_Three_Cases:
+  assumes "Spec f"
+      and "Enabled (AcceptorAction a) (f i)"
+      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
+    shows "three_cases a (f i) (f (1 + i))"
+  unfolding three_cases.simps
+  using Preserves_AcceptorAction_Disabled_Three_Cases_Pre assms(1) assms(2) assms(3) by presburger
 
 
 end

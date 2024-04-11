@@ -31,40 +31,689 @@ next
     using assms(2) assms(3) by force
 qed
 
-lemma from_1a_to_disabled:
+(*
+Idea: Prove that the T1a message must eventually make its way to
+known_msgs_acc a by the time AcceptorAction is disabled. Prove by
+induction that the only way for this to happen is a proccess1a step. 
+
+With appropriate assumptions, all proerties should continue to hold
+as well.
+*)
+lemma step_1a_only:
   assumes "Spec f"
       and "M1a b \<in> set (msgs (f i))"
-      and "Enabled (AcceptorAction a) (f i)"
+      and "is_safe a"
       and "M1a b \<notin> set (known_msgs_acc (f i) a)"
-    shows "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j)
-           \<longrightarrow>
+    shows "i < j \<and> M1a b \<in> set (known_msgs_acc (f j) a) \<longrightarrow>
            (\<exists>k. i \<le> k \<and> k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
 proof (induction j)
   case 0
+  then show ?case 
+    by fastforce
+next
+  case (Suc j)
+  show "i < Suc j \<and> M1a b \<in> set (known_msgs_acc (f (Suc j)) a) \<longrightarrow>
+                 (\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+  proof (cases "M1a b \<in> set (known_msgs_acc (f j) a)")
+    case True
+    then show ?thesis
+      using Suc assms(4) less_Suc_eq by blast
+  next
+    case False
+    then show ?thesis
+    proof (clarify)
+      assume "i < Suc j"
+         and "M1a b \<in> set (known_msgs_acc (f (Suc j)) a)"
+      have "Next (f j) (f (Suc j))"
+        by (metis False Spec.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1))
+      then have "\<not> (ProposerSendAction (f j) (f (Suc j)))"
+        by (metis False ProposerSendAction.elims(2) Send1a.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      have "\<forall> ln m. \<not> (LearnerRecv ln m (f j) (f (Suc j)))"
+        by (smt (verit, ccfv_SIG) False LearnerRecv.simps \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(3))
+      have "\<forall> ln blt val. \<not> (LearnerDecide ln blt val (f j) (f (Suc j)))"
+        using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+      then have "\<forall>a. \<not> (LearnerProcessAction (f j) (f (Suc j)))"
+        by (meson LearnerAction.elims(2) LearnerProcessAction.elims(1) \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close>)
+      have "\<forall>a. \<not> (FakeSend1b a (f j) (f (Suc j)))"
+        by (metis FakeSend1b.elims(1) False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      have "\<forall>a. \<not> (FakeSend2a a (f j) (f (Suc j)))"
+        by (metis FakeSend2a.simps False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      then have "\<not> (FakeAcceptorAction (f j) (f (Suc j)))"
+        using FakeAcceptorAction.simps \<open>\<forall>a. \<not> FakeSend1b a (f j) (f (Suc j))\<close> by presburger
+      then have "AcceptorProcessAction (f j) (f (Suc j))"
+        by (meson LearnerAction.elims(2) LearnerProcessAction.elims(2) Next.simps \<open>Next (f j) (f (Suc j))\<close> \<open>\<forall>ln blt val. \<not> LearnerDecide ln blt val (f j) (f (Suc j))\<close> \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close> \<open>\<not> ProposerSendAction (f j) (f (Suc j))\<close>)
+      have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1a A m (f j) (f (Suc j)))"
+        by (metis False Process1a.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+      have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1b A m (f j) (f (Suc j)))"
+        by (metis False Process1b.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+      have "\<forall> a. \<not> (Process1bLearnerLoopDone a (f j) (f (Suc j)))"
+        using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+      have "\<forall> ln. \<not> (Process1bLearnerLoopStep a ln (f j) (f (Suc j)))"
+        unfolding Process1bLearnerLoopStep.simps
+        by (smt (verit, ccfv_SIG) False PreMessage.distinct(3) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)  
+      then have "\<forall> A. a \<noteq> A \<longrightarrow> \<not> AcceptorAction A (f j) (f (Suc j))"
+      proof -
+        { fix aa :: Acceptor
+          have "known_msgs_acc (f (Suc j)) \<noteq> known_msgs_acc (f j) \<and> known_msgs_acc (f (Suc j)) a \<noteq> known_msgs_acc (f j) a"
+            using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by fastforce
+          then have "aa = a \<or> \<not> AcceptorAction aa (f j) (f (Suc j))"
+            by (metis (full_types) AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1b A m (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close>) }
+        then show ?thesis
+          by (metis (no_types))
+      qed
+      then have "AcceptorAction a (f j) (f (Suc j))"
+        by (metis AcceptorProcessAction.simps \<open>AcceptorProcessAction (f j) (f (Suc j))\<close>)
+      have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1a a m (f j) (f (Suc j)))"
+        unfolding Process1a.simps
+        by (metis False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+      have "\<not> (Process1b a (M1a b) (f j) (f (Suc j)))"
+        by simp
+      have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1b a m (f j) (f (Suc j)))"
+        unfolding Process1b.simps
+        by (metis (no_types, lifting) False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+      then have "\<forall> m. \<not> (Process1b a m (f j) (f (Suc j)))"
+        by (metis \<open>\<not> Process1b a (M1a b) (f j) (f (Suc j))\<close>)
+      then have "Process1a a (M1a b) (f j) (f (Suc j))"
+        by (metis AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) \<open>AcceptorAction a (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close> \<open>\<forall>ln. \<not> Process1bLearnerLoopStep a ln (f j) (f (Suc j))\<close> \<open>\<forall>m. M1a b \<noteq> m \<longrightarrow> \<not> Process1a a m (f j) (f (Suc j))\<close>)
+      then show "\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
+        by (metis \<open>i < Suc j\<close> lessI less_Suc_eq_le plus_1_eq_Suc)
+    qed
+  qed
+qed
+
+lemma step_1a_side:
+  assumes "Spec f"
+      and "M1a b \<in> set (msgs (f i))"
+      and "is_safe a"
+      and "M1a b \<notin> set (known_msgs_acc (f i) a)"
+    shows "i < j \<and> M1a b \<in> set (known_msgs_acc (f j) a) \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < j \<and> 
+              M1a b \<notin> set (known_msgs_acc (f k) a)
+            \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+proof (induction j)
+  case 0
+  then show ?case 
+    by fastforce
+next
+  case (Suc j)
+  show "i < Suc j \<and> M1a b \<in> set (known_msgs_acc (f (Suc j)) a) \<longrightarrow>
+                 (\<exists>k\<ge>i. k < Suc j \<and> M1a b \<notin> set (known_msgs_acc (f k) a) \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+  proof (cases "M1a b \<in> set (known_msgs_acc (f j) a)")
+    case True
+    then show ?thesis
+      using Suc assms(4) less_Suc_eq by blast
+  next
+    case False
+    then show ?thesis
+    proof (clarify)
+      assume "i < Suc j"
+         and "M1a b \<in> set (known_msgs_acc (f (Suc j)) a)"
+      have "Next (f j) (f (Suc j))"
+        by (metis False Spec.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1))
+      then have "\<not> (ProposerSendAction (f j) (f (Suc j)))"
+        by (metis False ProposerSendAction.elims(2) Send1a.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      have "\<forall> ln m. \<not> (LearnerRecv ln m (f j) (f (Suc j)))"
+        by (smt (verit, ccfv_SIG) False LearnerRecv.simps \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(3))
+      have "\<forall> ln blt val. \<not> (LearnerDecide ln blt val (f j) (f (Suc j)))"
+        using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+      then have "\<forall>a. \<not> (LearnerProcessAction (f j) (f (Suc j)))"
+        by (meson LearnerAction.elims(2) LearnerProcessAction.elims(1) \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close>)
+      have "\<forall>a. \<not> (FakeSend1b a (f j) (f (Suc j)))"
+        by (metis FakeSend1b.elims(1) False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      have "\<forall>a. \<not> (FakeSend2a a (f j) (f (Suc j)))"
+        by (metis FakeSend2a.simps False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+      then have "\<not> (FakeAcceptorAction (f j) (f (Suc j)))"
+        using FakeAcceptorAction.simps \<open>\<forall>a. \<not> FakeSend1b a (f j) (f (Suc j))\<close> by presburger
+      then have "AcceptorProcessAction (f j) (f (Suc j))"
+        by (meson LearnerAction.elims(2) LearnerProcessAction.elims(2) Next.simps \<open>Next (f j) (f (Suc j))\<close> \<open>\<forall>ln blt val. \<not> LearnerDecide ln blt val (f j) (f (Suc j))\<close> \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close> \<open>\<not> ProposerSendAction (f j) (f (Suc j))\<close>)
+      have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1a A m (f j) (f (Suc j)))"
+        by (metis False Process1a.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+      have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1b A m (f j) (f (Suc j)))"
+        by (metis False Process1b.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+      have "\<forall> a. \<not> (Process1bLearnerLoopDone a (f j) (f (Suc j)))"
+        using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+      have "\<forall> ln. \<not> (Process1bLearnerLoopStep a ln (f j) (f (Suc j)))"
+        unfolding Process1bLearnerLoopStep.simps
+        by (smt (verit, ccfv_SIG) False PreMessage.distinct(3) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)  
+      then have "\<forall> A. a \<noteq> A \<longrightarrow> \<not> AcceptorAction A (f j) (f (Suc j))"
+      proof -
+        { fix aa :: Acceptor
+          have "known_msgs_acc (f (Suc j)) \<noteq> known_msgs_acc (f j) \<and> known_msgs_acc (f (Suc j)) a \<noteq> known_msgs_acc (f j) a"
+            using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by fastforce
+          then have "aa = a \<or> \<not> AcceptorAction aa (f j) (f (Suc j))"
+            by (metis (full_types) AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1b A m (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close>) }
+        then show ?thesis
+          by (metis (no_types))
+      qed
+      then have "AcceptorAction a (f j) (f (Suc j))"
+        by (metis AcceptorProcessAction.simps \<open>AcceptorProcessAction (f j) (f (Suc j))\<close>)
+      have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1a a m (f j) (f (Suc j)))"
+        unfolding Process1a.simps
+        by (metis False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+      have "\<not> (Process1b a (M1a b) (f j) (f (Suc j)))"
+        by simp
+      have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1b a m (f j) (f (Suc j)))"
+        unfolding Process1b.simps
+        by (metis (no_types, lifting) False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+      then have "\<forall> m. \<not> (Process1b a m (f j) (f (Suc j)))"
+        by (metis \<open>\<not> Process1b a (M1a b) (f j) (f (Suc j))\<close>)
+      then have "Process1a a (M1a b) (f j) (f (Suc j))"
+        by (metis AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) \<open>AcceptorAction a (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close> \<open>\<forall>ln. \<not> Process1bLearnerLoopStep a ln (f j) (f (Suc j))\<close> \<open>\<forall>m. M1a b \<noteq> m \<longrightarrow> \<not> Process1a a m (f j) (f (Suc j))\<close>)
+      then show "(\<exists>k. i \<le> k \<and> k < Suc j \<and> 
+              M1a b \<notin> set (known_msgs_acc (f k) a)
+            \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+        by (metis False \<open>i < Suc j\<close> less_Suc_eq less_Suc_eq_le plus_1_eq_Suc)
+    qed
+  qed
+qed
+
+lemma step_1a_constraints:
+  assumes "Spec f"
+      and "M1a b \<in> set (msgs (f i))"
+      and "is_safe a"
+      and "M1a b \<notin> set (known_msgs_acc (f i) a)"
+      and "\<not> (\<exists>M \<in> set (msgs (f i)). M \<noteq> M1a b \<and> Recv_acc (f i) a M \<and> (type M = T1a \<or> type M = T1b))"
+      and "\<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb < b"
+      and "queued_msg (f i) a = None"
+      and "\<not> two_a_lrn_loop (f i) a"
+    shows "i < j \<and> M1a b \<notin> set (known_msgs_acc (f j) a) \<and>
+           (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
+                                      \<and> \<not> FakeAcceptorAction (f k) (f (1 + k)))
+           \<longrightarrow>
+           (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> (\<exists>M \<in> set (msgs (f k)). M \<noteq> M1a b \<and> Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b))
+                                    \<and> (\<forall> mb :: Ballot. MaxBal (f k) a mb \<longrightarrow> mb < b)
+                                    \<and> queued_msg (f k) a = None
+                                    \<and> \<not> two_a_lrn_loop (f k) a)"
+proof (induction j)
+  case 0
   then show ?case
-    by (metis Init.simps Spec.elims(2) assms(1) assms(2) empty_iff empty_set le_zero_eq select_convs(1))
+    by fastforce
+next
+  case (Suc j)
+  assume ih:"i < j \<and>
+         M1a b \<notin> set (known_msgs_acc (f j) a) \<and>
+         (\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow>
+              \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+              \<not> FakeAcceptorAction (f k) (f (1 + k))) \<longrightarrow>
+         (\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow>
+              \<not> (\<exists>M\<in>set (msgs (f k)).
+                     M \<noteq> M1a b \<and>
+                     Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b)) \<and>
+              (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b)
+                                    \<and> queued_msg (f k) a = None
+                                    \<and> \<not> two_a_lrn_loop (f k) a)"
+  then show ?case
+  proof (clarify)
+    fix k
+    assume "i < Suc j"
+       and "M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)"
+       and "\<forall>k. i \<le> k \<and> k \<le> Suc j \<longrightarrow>
+             \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+             \<not> FakeAcceptorAction (f k) (f (1 + k))"
+       and "i \<le> k"
+       and "k \<le> Suc j"
+    have "M1a b \<notin> set (known_msgs_acc (f j) a)"
+      by (metis \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1) known_msgs_acc_preserved le_add2 plus_1_eq_Suc)
+    have "(\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow>
+              \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+              \<not> FakeAcceptorAction (f k) (f (1 + k)))"
+      using \<open>\<forall>k. i \<le> k \<and> k \<le> Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> le_Suc_eq by presburger
+    have ihu:"(\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow>
+              \<not> (\<exists>M\<in>set (msgs (f k)).
+                     M \<noteq> M1a b \<and>
+                     Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b)) \<and>
+              (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b))"
+      by (metis \<open>M1a b \<notin> set (known_msgs_acc (f j) a)\<close> \<open>\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> antisym assms(5) assms(6) ih less_SucE)
+    show "\<not> (\<exists>M\<in>set (msgs (f k)).
+                    M \<noteq> M1a b \<and>
+                    Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b))
+               \<and> (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b)
+                                    \<and> queued_msg (f k) a = None
+                                    \<and> \<not> two_a_lrn_loop (f k) a"
+    proof (cases "k \<noteq> Suc j")
+      case True
+      then show ?thesis 
+        using \<open>\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> (\<exists>M\<in>set (msgs (f k)). M \<noteq> M1a b \<and> Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b)) \<and> (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b)\<close> \<open>i \<le> k\<close> \<open>k \<le> Suc j\<close> le_SucE by blast
+    next
+      case False
+      have ihu1: "\<not> (\<exists>M\<in>set (msgs (f j)).
+                     M \<noteq> M1a b \<and>
+                     Recv_acc (f j) a M \<and> (type M = T1a \<or> type M = T1b))"
+        using \<open>i < Suc j\<close> ihu less_Suc_eq_le by blast
+      have ihu2: "(\<forall>mb. MaxBal (f j) a mb \<longrightarrow> mb < b)"
+        using \<open>i < Suc j\<close> ihu less_Suc_eq_le by blast
+      have r1: "known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a \<longrightarrow> (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b)"
+        using False MaxBal.simps ihu2 by presburger
+      have r2: "known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a \<and> set (msgs (f j)) = set (msgs (f (Suc j))) 
+            \<longrightarrow> \<not> (\<exists>M\<in>set (msgs (f k)). M \<noteq> M1a b \<and> Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b))"
+        unfolding Recv_acc.simps Proper_acc.simps
+        by (metis False Proper_acc.elims(1) Recv_acc.elims(3) Wellformed_Constant assms(1) ihu1)
+      have r3: "queued_msg (f j) a = queued_msg (f (Suc j)) a \<longrightarrow> queued_msg (f k) a = None"
+        by (metis False MessageType.distinct(1) QueuedMsgResult QueuedMsgSpec1.elims(2) QueuedMsgSpec2.elims(2) QueuedMsgSpec2_Conserved assms(1) assms(3) ihu1 type.simps(1))
+      have r4: "two_a_lrn_loop (f j) a = two_a_lrn_loop (f (Suc j)) a \<longrightarrow> \<not> two_a_lrn_loop (f k) a "
+        by (metis False Orderings.order_eq_iff \<open>M1a b \<notin> set (known_msgs_acc (f j) a)\<close> \<open>\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> assms(8) ih not_less_less_Suc_eq order_less_imp_le)
+      show ?thesis
+      proof (cases "f j = f (Suc j)")
+        case True
+        then show ?thesis
+          by (metis False \<open>M1a b \<notin> set (known_msgs_acc (f j) a)\<close> \<open>\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> assms(7) assms(8) dual_order.eq_iff dual_order.strict_implies_order ih not_less_less_Suc_eq r1 r2)
+      next
+        case False
+        have "Next (f j) (f (Suc j))"
+          using False Spec.simps assms(1) by blast
+        have "\<not> (ProposerSendAction (f j) (f (Suc j)))"
+          by (metis \<open>\<forall>k. i \<le> k \<and> k \<le> Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> le_add2 less_Suc_eq_le plus_1_eq_Suc)
+        have "\<not> (FakeAcceptorAction (f j) (f (Suc j)))"
+          by (metis \<open>\<forall>k. i \<le> k \<and> k \<le> Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> le_add2 less_Suc_eq_le plus_1_eq_Suc)
+        have "\<forall>m \<in> set (msgs (f j)). \<not> (Process1a a m (f j) (f (Suc j)))"
+          by (metis Process1a.elims(2) Process1a_Req_known_msgs \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1) diff_Suc_1 ihu1)
+        have "\<forall>m \<in> set (msgs (f j)). \<not> (Process1b a m (f j) (f (Suc j)))"
+          by (metis Enabled.simps MessageType.distinct(1) Process1b_Enabled ihu1 type.simps(1))
+        then show ?thesis
+        proof (cases "LearnerProcessAction (f j) (f (Suc j))")
+          case True
+          then show ?thesis
+            unfolding LearnerProcessAction.simps LearnerAction.simps
+          proof (clarify)
+            fix ln
+            assume "(\<exists>m\<in>set (msgs (f j)). LearnerRecv ln m (f j) (f (Suc j))) \<or>
+                    (\<exists>blt val. LearnerDecide ln blt val (f j) (f (Suc j)))"
+            then show ?thesis
+              unfolding LearnerRecv.simps LearnerDecide.simps
+            proof -
+              assume a1: "(\<exists>m\<in>set (msgs (f j)). Recv_lrn (f j) ln m \<and> f (Suc j) = f j \<lparr>known_msgs_lrn := \<lambda>x. if ln = x then m # known_msgs_lrn (f j) x else known_msgs_lrn (f j) x\<rparr>) \<or> (\<exists>blt val. ChosenIn (f j) ln blt val \<and> f (Suc j) = f j \<lparr>decision := \<lambda>x y. if x = ln \<and> y = blt then {val} \<union> decision (f j) x y else decision (f j) x y\<rparr>)"
+              have "i < j \<and> M1a b \<notin> set (known_msgs_acc (f j) a) \<and> (\<forall>n. i \<le> n \<and> n \<le> j \<longrightarrow> \<not> ProposerSendAction (f n) (f (1 + n)) \<and> \<not> FakeAcceptorAction (f n) (f (1 + n))) \<longrightarrow> (\<forall>n. i \<le> n \<and> n \<le> j \<longrightarrow> (\<forall>p. p \<notin> set (msgs (f n)) \<or> p = M1a b \<or> \<not> Recv_acc (f n) a p \<or> type p \<noteq> T1a \<and> type p \<noteq> T1b) \<and> (\<forall>na. MaxBal (f n) a na \<longrightarrow> na < b) \<and> queued_msg (f n) a = None \<and> \<not> two_a_lrn_loop (f n) a)"
+                using ih by blast
+              then have f2: "\<not> i < j \<or> (\<forall>n. \<not> i \<le> n \<or> \<not> n \<le> j \<or> (\<forall>p. p \<notin> set (msgs (f n)) \<or> p = M1a b \<or> \<not> Recv_acc (f n) a p \<or> type p \<noteq> T1a \<and> type p \<noteq> T1b) \<and> (\<forall>na. \<not> MaxBal (f n) a na \<or> na < b) \<and> queued_msg (f n) a = None \<and> \<not> two_a_lrn_loop (f n) a)"
+                using \<open>M1a b \<notin> set (known_msgs_acc (f j) a)\<close> \<open>\<forall>k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> by presburger
+              have f3: "\<forall>n na. n < na \<or> \<not> n < Suc na \<or> na = n"
+                using less_antisym by blast
+              then have f4: "i < j \<or> j = i"
+                using \<open>i < Suc j\<close> by blast
+              have f5: "k < Suc j \<or> Suc j = k"
+                using f3 \<open>k \<le> Suc j\<close> less_Suc_eq_le by blast
+              obtain nn :: nat and pp :: PreMessage where
+                f6: "((\<exists>p. p \<in> set (msgs (f k)) \<and> p \<noteq> M1a b \<and> Recv_acc (f k) a p \<and> (type p = T1a \<or> type p = T1b)) \<or> (\<exists>n. MaxBal (f k) a n \<and> \<not> n < b) \<or> queued_msg (f k) a \<noteq> None \<or> two_a_lrn_loop (f k) a) = (pp \<in> set (msgs (f k)) \<and> pp \<noteq> M1a b \<and> Recv_acc (f k) a pp \<and> (type pp = T1a \<or> type pp = T1b) \<or> MaxBal (f k) a nn \<and> \<not> nn < b \<or> queued_msg (f k) a \<noteq> None \<or> two_a_lrn_loop (f k) a)"
+                by blast
+              have f7: "\<lparr>msgs = msgs (f j), known_msgs_acc = known_msgs_acc (f j), known_msgs_lrn = \<lambda>l. if ln = l then v0_2 # known_msgs_lrn (f j) l else known_msgs_lrn (f j) l, recent_msgs = recent_msgs (f j), queued_msg = queued_msg (f j), two_a_lrn_loop = two_a_lrn_loop (f j), processed_lrns = processed_lrns (f j), decision = decision (f j), BVal = BVal (f j), \<dots> = more (f j)\<rparr> = f j\<lparr>known_msgs_lrn := \<lambda>l. if ln = l then v0_2 # known_msgs_lrn (f j) l else known_msgs_lrn (f j) l\<rparr>"
+                by simp
+              obtain ppa :: PreMessage and nna :: nat and vv :: Value where
+                f8: "ppa \<in> set (msgs (f j)) \<and> Recv_lrn (f j) ln ppa \<and> f (Suc j) = f j \<lparr>known_msgs_lrn := \<lambda>l. if ln = l then ppa # known_msgs_lrn (f j) l else known_msgs_lrn (f j) l\<rparr> \<or> ChosenIn (f j) ln nna vv \<and> f (Suc j) = f j \<lparr>decision := \<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n\<rparr>"
+                using a1 by blast
+              have f9: "f (Suc j) = f j \<lparr>decision := \<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n\<rparr> \<longrightarrow> \<lparr>msgs = msgs (f j), known_msgs_acc = known_msgs_acc (f j), known_msgs_lrn = known_msgs_lrn (f j), recent_msgs = recent_msgs (f j), queued_msg = queued_msg (f j), two_a_lrn_loop = two_a_lrn_loop (f j), processed_lrns = processed_lrns (f j), decision = \<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n, BVal = BVal (f j), \<dots> = more (f j)\<rparr> = \<lparr>msgs = msgs (f (Suc j)), known_msgs_acc = known_msgs_acc (f (Suc j)), known_msgs_lrn = known_msgs_lrn (f (Suc j)), recent_msgs = recent_msgs (f (Suc j)), queued_msg = queued_msg (f (Suc j)), two_a_lrn_loop = two_a_lrn_loop (f (Suc j)), processed_lrns = processed_lrns (f (Suc j)), decision = decision (f (Suc j)), BVal = BVal (f (Suc j)), \<dots> = more (f (Suc j))\<rparr>"
+                by simp
+              have f10: "\<forall>ps f fa fb fc p fd fe ff u psa fg fh fi fj pa fk fl fm ua. (\<lparr>msgs = ps, known_msgs_acc = f, known_msgs_lrn = fa, recent_msgs = fb, queued_msg = fc, two_a_lrn_loop = p, processed_lrns = fd, decision = fe, BVal = ff, \<dots> = u::unit\<rparr> = \<lparr>msgs = psa, known_msgs_acc = fg, known_msgs_lrn = fh, recent_msgs = fi, queued_msg = fj, two_a_lrn_loop = pa, processed_lrns = fk, decision = fl, BVal = fm, \<dots> = ua\<rparr>) = (ps = psa \<and> f = fg \<and> fa = fh \<and> fb = fi \<and> fc = fj \<and> p = pa \<and> fd = fk \<and> fe = fl \<and> ff = fm \<and> u = ua)"
+                by simp
+              have f11: "i \<le> j"
+                using \<open>i < Suc j\<close> by auto
+              have f12: "queued_msg (f j) = queued_msg (f (Suc j)) \<and> queued_msg (f k) a \<noteq> None \<longrightarrow> queued_msg (f k) a = None"
+                using f4 f3 f2 by (metis (no_types) \<open>i \<le> k\<close> \<open>k \<le> Suc j\<close> assms(7) less_Suc_eq_le linorder_not_less)
+              moreover
+              { assume "ppa \<notin> set (msgs (f j)) \<or> \<not> Recv_lrn (f j) ln ppa \<or> f (Suc j) \<noteq> f j \<lparr>known_msgs_lrn := \<lambda>l. if ln = l then ppa # known_msgs_lrn (f j) l else known_msgs_lrn (f j) l\<rparr>"
+                moreover
+                { assume "(msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> \<not> two_a_lrn_loop (f (Suc j)) a"
+                  then have "(msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> Suc j \<noteq> k \<or> (msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> \<not> two_a_lrn_loop (f k) a"
+                    by meson }
+                moreover
+                { assume "(msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> \<not> j \<le> j"
+                  then have "(msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> Suc j \<noteq> k \<or> (msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> k \<le> j"
+                    by force }
+                ultimately have "(msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> Suc j \<noteq> k \<or> (msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> k \<le> j \<or> (msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> j = i \<or> (msgs (f j) = msgs (f (Suc j)) \<and> known_msgs_acc (f j) = known_msgs_acc (f (Suc j)) \<and> known_msgs_lrn (f j) = known_msgs_lrn (f (Suc j)) \<and> recent_msgs (f j) = recent_msgs (f (Suc j)) \<and> queued_msg (f j) = queued_msg (f (Suc j)) \<and> two_a_lrn_loop (f j) = two_a_lrn_loop (f (Suc j)) \<and> processed_lrns (f j) = processed_lrns (f (Suc j)) \<and> (\<lambda>l n. if l = ln \<and> n = nna then {vv} \<union> decision (f j) l n else decision (f j) l n) = decision (f (Suc j)) \<and> BVal (f j) = BVal (f (Suc j)) \<and> more (f j) = more (f (Suc j))) \<and> \<not> two_a_lrn_loop (f k) a"
+                  using f11 f10 f9 f8 f4 f2 by (smt (z3))
+                then have "(pp \<notin> set (msgs (f k)) \<or> pp = M1a b \<or> \<not> Recv_acc (f k) a pp \<or> type pp \<noteq> T1a \<and> type pp \<noteq> T1b) \<and> (\<not> MaxBal (f k) a nn \<or> nn < b) \<and> queued_msg (f k) a = None \<and> \<not> two_a_lrn_loop (f k) a"
+                  using f12 f5 f4 f3 f2 by (smt (z3) \<open>i \<le> k\<close> assms(8) less_Suc_eq_le linorder_not_less r1 r2) }
+              ultimately show ?thesis
+                using f10 f7 f6 f5 f4 f3 f2
+                by (smt (z3) \<open>i \<le> k\<close> assms(8) less_Suc_eq_le linorder_not_less r1 r2 surjective update_convs(3))
+            qed
+          qed
+        next
+          case False
+          have "AcceptorProcessAction (f j) (f (Suc j))"
+            using False Next.elims(2) \<open>Next (f j) (f (Suc j))\<close> \<open>\<not> FakeAcceptorAction (f j) (f (Suc j))\<close> \<open>\<not> ProposerSendAction (f j) (f (Suc j))\<close> by blast
+          then have "(\<exists>A :: Acceptor. is_safe A
+                                    \<and> queued_msg (f j) A = None 
+                                    \<and> (\<exists>m \<in> set (msgs (f j)). Process1a A m (f j) (f (Suc j)))) \<or>
+                      (\<exists>A :: Acceptor. is_safe A
+                                    \<and> queued_msg (f j) A \<noteq> None 
+                                    \<and> Process1b A (the (queued_msg (f j) A)) (f j) (f (Suc j))) \<or>
+                      (\<exists>A :: Acceptor. is_safe A
+                                    \<and> queued_msg (f j) A = None 
+                                    \<and> (\<exists>m \<in> set (msgs (f j)). Process1b A m (f j) (f (Suc j)))) \<or>
+                      (\<exists>A :: Acceptor. is_safe A
+                                    \<and> two_a_lrn_loop (f j) A 
+                                    \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l (f j) (f (Suc j)))) \<or>
+                      (\<exists>A :: Acceptor. is_safe A
+                                    \<and> two_a_lrn_loop (f j) A 
+                                    \<and> Process1bLearnerLoopDone A (f j) (f (Suc j)))"
+            using Acceptor_split by presburger
+          then show ?thesis
+          proof (elim disjE)
+            assume "\<exists>A. is_safe A \<and>
+              queued_msg (f j) A = None \<and>
+              (\<exists>m\<in>set (msgs (f j)).
+                  Process1a A m (f j) (f (Suc j)))"
+            then show ?thesis
+            proof (clarify)
+              fix A m
+              assume "is_safe A"
+                 and "queued_msg (f j) A = None"
+                 and "m \<in> set (msgs (f j))"
+                 and "Process1a A m (f j) (f (Suc j))"
+              define new1b where "new1b = M1b A (m # recent_msgs (f j) A)"
+              then show ?thesis
+              proof (cases "WellFormed (f j) new1b")
+                case True
+                then show ?thesis sorry
+              next
+                case False
+                then show ?thesis sorry
+              qed
+            qed
+          next
+            assume "\<exists>A. is_safe A \<and>
+                      queued_msg (f j) A \<noteq> None \<and>
+                      Process1b A (the (queued_msg (f j) A)) (f j) (f (Suc j))"
+            then show ?thesis
+            proof (clarify)
+              fix A y
+              assume "is_safe A"
+                 and "queued_msg (f j) A = Some y"
+                 and "Process1b A (the (queued_msg (f j) A)) (f j) (f (Suc j))"
+              then show ?thesis
+                unfolding Process1b.simps
+                sorry
+            qed
+          next
+            assume "\<exists>A. is_safe A \<and>
+                        queued_msg (f j) A = None \<and>
+                        (\<exists>m\<in>set (msgs (f j)). Process1b A m (f j) (f (Suc j)))"
+            then show ?thesis
+            proof (clarify)
+              fix A m
+              assume "is_safe A"
+                 and "queued_msg (f j) A = None"
+                 and "m\<in>set (msgs (f j))"
+                 and "Process1b A m (f j) (f (Suc j))"
+              then have "A \<noteq> a"
+                sorry
+              then show ?thesis
+                sorry
+            qed
+          next
+            assume "\<exists>A. is_safe A \<and>
+                two_a_lrn_loop (f j) A \<and>
+                (\<exists>l. Process1bLearnerLoopStep A l (f j) (f (Suc j)))"
+            then show ?thesis
+            proof (clarify)
+              fix A l
+              assume "is_safe A"
+                 and "two_a_lrn_loop (f j) A"
+                 and "Process1bLearnerLoopStep A l (f j) (f (Suc j))"
+              then have "A \<noteq> a"
+                sorry
+              then show ?thesis
+                sorry
+            qed
+          next
+            assume "\<exists>A. is_safe A \<and>
+                      two_a_lrn_loop (f j) A \<and>
+                      Process1bLearnerLoopDone A (f j) (f (Suc j))"
+            then show ?thesis
+            proof (clarify)
+              fix A
+              assume "is_safe A"
+                 and "two_a_lrn_loop (f j) A"
+                 and "Process1bLearnerLoopDone A (f j) (f (Suc j))"
+              then have "A \<noteq> a"
+                sorry
+              then show ?thesis
+                sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma step_1a_full:
+  assumes "Spec f"
+      and "M1a b \<in> set (msgs (f i))"
+      and "\<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb < b"
+      and "is_safe a"
+      and "M1a b \<notin> set (known_msgs_acc (f i) a)"
+      and "\<not> (\<exists>M \<in> set (msgs (f i)). M \<noteq> M1a b \<and> Recv_acc (f i) a M \<and> (type M = T1a \<or> type M = T1b))"
+    shows "M1a b \<in> set (known_msgs_acc (f (i + j)) a) \<and>
+           (\<forall> k. i \<le> k \<and> k \<le> i + j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
+                                      \<and> \<not> FakeAcceptorAction (f k) (f (1 + k)))
+           \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < i + j \<and>
+             (\<forall> mb :: Ballot. MaxBal (f k) a mb \<longrightarrow> mb < b) \<and>
+             \<not> (\<exists>M \<in> set (msgs (f k)). M \<noteq> M1a b \<and> Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b)))"
+proof (induction j)
+  case 0
+  then show ?case
+    by (metis assms(5) verit_sum_simplify)
+next
+  case (Suc j)
+  then show ?case sorry
+qed
+
+lemma step_:
+  assumes "Spec f"
+      and "M1a b \<in> set (msgs (f i))"
+      and "\<forall> mb :: Ballot. MaxBal (f i) a mb \<longrightarrow> mb < b"
+      and "is_safe a"
+      and "M1a b \<notin> set (known_msgs_acc (f i) a)"
+      and "\<not> (\<exists>M \<in> set (msgs (f i)). M \<noteq> M1a b \<and> Recv_acc (f i) a M \<and> (type M = T1a \<or> type M = T1b))"
+    shows "i < j \<and> M1a b \<in> set (known_msgs_acc (f j) a) \<and>
+           (\<forall> k. i < k \<and> k < j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
+                                 \<and> \<not> FakeAcceptorAction (f k) (f (1 + k)))
+           \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < j \<and> 
+             M1a b \<notin> set (known_msgs_acc (f k) a) \<and>
+             Process1a a (M1a b) (f k) (f (1 + k)) \<and>
+             (\<forall> mb :: Ballot. MaxBal (f k) a mb \<longrightarrow> mb < b) \<and>
+             \<not> (\<exists>M \<in> set (msgs (f k)). M \<noteq> M1a b \<and> Recv_acc (f k) a M \<and> (type M = T1a \<or> type M = T1b)))"
+proof (induction j)
+  case 0
+  then show ?case 
+    by fastforce
+next
+  case (Suc j)
+  assume ih: "i < j \<and>
+         M1a b \<in> set (known_msgs_acc (f j) a) \<and>
+         (\<forall>k. i < k \<and> k < j \<longrightarrow>
+              \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+              \<not> FakeAcceptorAction (f k) (f (1 + k))) \<longrightarrow>
+         (\<exists>k\<ge>i. k < j \<and>
+                 M1a b \<notin> set (known_msgs_acc (f k) a) \<and>
+                 Process1a a (M1a b) (f k) (f (1 + k)) \<and>
+                 (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b) \<and>
+                 \<not> (\<exists>M\<in>set (msgs (f k)).
+                        M \<noteq> M1a b \<and>
+                        Recv_acc (f k) a M \<and>
+                        (type M = T1a \<or> type M = T1b)))"
+  show ?case
+  proof (clarify)
+    assume "i < Suc j"
+       and "M1a b \<in> set (known_msgs_acc (f (Suc j)) a)"
+       and "\<forall>k. i < k \<and> k < Suc j \<longrightarrow>
+            \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+            \<not> FakeAcceptorAction (f k) (f (1 + k))"
+    then show "\<exists>k\<ge>i. k < Suc j \<and>
+           M1a b \<notin> set (known_msgs_acc (f k) a) \<and>
+           Process1a a (M1a b) (f k) (f (1 + k)) \<and>
+           (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b) \<and>
+           \<not> (\<exists>M\<in>set (msgs (f k)).
+                  M \<noteq> M1a b \<and>
+                  Recv_acc (f k) a M \<and>
+                  (type M = T1a \<or> type M = T1b))"
+    proof (cases "i = j")
+      case True
+      then show ?thesis
+        by (metis \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>i < Suc j\<close> assms(1) assms(2) assms(3) assms(4) assms(5) assms(6) le_less_Suc_eq step_1a_only)
+    next
+      case False
+      have "i < j"
+        using False \<open>i < Suc j\<close> by linarith
+      have "(\<forall>k. i < k \<and> k < j \<longrightarrow>
+              \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+              \<not> FakeAcceptorAction (f k) (f (1 + k)))"
+        using \<open>\<forall>k. i < k \<and> k < Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> less_Suc_eq by blast
+      then show ?thesis sorry
+    qed
+
+
+      proof (cases "M1a b \<in> set (known_msgs_acc (f j) a)")
+        case True
+        then show ?thesis
+          by (metis Suc \<open>\<forall>k. i < k \<and> k < Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> \<open>i < Suc j\<close> assms(5) less_Suc_eq)
+      next
+        case False
+          have "Next (f j) (f (Suc j))"
+            by (metis False Spec.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1))
+          then have "\<not> (ProposerSendAction (f j) (f (Suc j)))"
+            by (metis False ProposerSendAction.elims(2) Send1a.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+          have "\<forall> ln m. \<not> (LearnerRecv ln m (f j) (f (Suc j)))"
+            by (smt (verit, ccfv_SIG) False LearnerRecv.simps \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(3))
+          have "\<forall> ln blt val. \<not> (LearnerDecide ln blt val (f j) (f (Suc j)))"
+            using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+          then have "\<forall>a. \<not> (LearnerProcessAction (f j) (f (Suc j)))"
+            by (meson LearnerAction.elims(2) LearnerProcessAction.elims(1) \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close>)
+          have "\<forall>a. \<not> (FakeSend1b a (f j) (f (Suc j)))"
+            by (metis FakeSend1b.elims(1) False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+          have "\<forall>a. \<not> (FakeSend2a a (f j) (f (Suc j)))"
+            by (metis FakeSend2a.simps False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> ext_inject surjective update_convs(1))
+          then have "\<not> (FakeAcceptorAction (f j) (f (Suc j)))"
+            using FakeAcceptorAction.simps \<open>\<forall>a. \<not> FakeSend1b a (f j) (f (Suc j))\<close> by presburger
+          then have "AcceptorProcessAction (f j) (f (Suc j))"
+            by (meson LearnerAction.elims(2) LearnerProcessAction.elims(2) Next.simps \<open>Next (f j) (f (Suc j))\<close> \<open>\<forall>ln blt val. \<not> LearnerDecide ln blt val (f j) (f (Suc j))\<close> \<open>\<forall>ln m. \<not> LearnerRecv ln m (f j) (f (Suc j))\<close> \<open>\<not> ProposerSendAction (f j) (f (Suc j))\<close>)
+          have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1a A m (f j) (f (Suc j)))"
+            by (metis False Process1a.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+          have "\<forall> A m. a \<noteq> A \<longrightarrow> \<not> (Process1b A m (f j) (f (Suc j)))"
+            by (metis False Process1b.elims(2) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close>)
+          have "\<forall> a. \<not> (Process1bLearnerLoopDone a (f j) (f (Suc j)))"
+            using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by force
+          have "\<forall> ln. \<not> (Process1bLearnerLoopStep a ln (f j) (f (Suc j)))"
+            unfolding Process1bLearnerLoopStep.simps
+            by (smt (verit, ccfv_SIG) False PreMessage.distinct(3) Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)  
+          then have "\<forall> A. a \<noteq> A \<longrightarrow> \<not> AcceptorAction A (f j) (f (Suc j))"
+          proof -
+            { fix aa :: Acceptor
+              have "known_msgs_acc (f (Suc j)) \<noteq> known_msgs_acc (f j) \<and> known_msgs_acc (f (Suc j)) a \<noteq> known_msgs_acc (f j) a"
+                using False \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> by fastforce
+              then have "aa = a \<or> \<not> AcceptorAction aa (f j) (f (Suc j))"
+                by (metis (full_types) AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>A m. a \<noteq> A \<longrightarrow> \<not> Process1b A m (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close>) }
+            then show ?thesis
+              by (metis (no_types))
+          qed
+          then have "AcceptorAction a (f j) (f (Suc j))"
+            by (metis AcceptorProcessAction.simps \<open>AcceptorProcessAction (f j) (f (Suc j))\<close>)
+          have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1a a m (f j) (f (Suc j)))"
+            unfolding Process1a.simps
+            by (metis False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+          have "\<not> (Process1b a (M1a b) (f j) (f (Suc j)))"
+            by simp
+          have "\<forall> m. (M1a b) \<noteq> m \<longrightarrow> \<not> (Process1b a m (f j) (f (Suc j)))"
+            unfolding Process1b.simps
+            by (metis (no_types, lifting) False Store_acc.elims(2) \<open>M1a b \<in> set (known_msgs_acc (f (Suc j)) a)\<close> set_ConsD)
+          then have "\<forall> m. \<not> (Process1b a m (f j) (f (Suc j)))"
+            by (metis \<open>\<not> Process1b a (M1a b) (f j) (f (Suc j))\<close>)
+          then have "Process1a a (M1a b) (f j) (f (Suc j))"
+            by (metis AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) \<open>AcceptorAction a (f j) (f (Suc j))\<close> \<open>\<forall>a. \<not> Process1bLearnerLoopDone a (f j) (f (Suc j))\<close> \<open>\<forall>ln. \<not> Process1bLearnerLoopStep a ln (f j) (f (Suc j))\<close> \<open>\<forall>m. M1a b \<noteq> m \<longrightarrow> \<not> Process1a a m (f j) (f (Suc j))\<close>)
+          then have "\<exists>k. i \<le> k \<and> k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
+            by (metis \<open>i < Suc j\<close> less_Suc_eq less_Suc_eq_le plus_1_eq_Suc)
+          have "\<forall>k. i < k \<and> k < j \<longrightarrow>
+              \<not> ProposerSendAction (f k) (f (1 + k)) \<and>
+              \<not> FakeAcceptorAction (f k) (f (1 + k))"
+            using \<open>\<forall>k. i < k \<and> k < Suc j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k)) \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))\<close> less_Suc_eq by presburger
+          show ?thesis
+          proof (cases "i < j")
+            case True
+            have "\<exists>k\<ge>i. k < j \<and>
+                 Process1a a (M1a b) (f k) (f (1 + k)) \<and>
+                 (\<forall>mb. MaxBal (f k) a mb \<longrightarrow> mb < b) \<and>
+                 \<not> (\<exists>M\<in>set (msgs (f k)).
+                        M \<noteq> M1a b \<and>
+                        Recv_acc (f k) a M \<and>
+                        (type M = T1a \<or> type M = T1b))"
+              sorry
+            then show ?thesis sorry
+          next
+            case False
+            have "i = j"
+              using False \<open>i < Suc j\<close> less_Suc_eq by blast
+            then show ?thesis
+              using \<open>\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))\<close> assms(3) assms(6) le_less_Suc_eq by blast
+          qed
+        qed
+      qed
+
+  qed
+qed
+
+
+(*
+Idea: One can establish that one of three things may happen.
+  Given the specifics, we might be able to say "it's this, not this".
+  e.g., if there's a T1a message, and nothing else, it must be a proccess1a.
+  after that, it should still be the case that AcceptorAction is enabled, so the
+  next step is possible. This should be enough to at least get to 
+  the learner loop.
+
+Edit: I don't believe this will work because this can't gaurantee that
+the properties which hold at i will still hold at k.
+*)
+lemma from_1a_to_disabled:
+  assumes "Spec f"
+      and "Enabled (AcceptorAction a) (f i)"
+    shows "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < j \<and> three_cases a (f k) (f (1 + k)))"
+proof (induction j)
+  case 0
+  then show ?case
+    using assms(2) by force
 next
   case (Suc j)
   assume "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow>
-          (\<exists>k\<ge>i. k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+          (\<exists>k\<ge>i. k < j \<and> three_cases a (f k) (f (1 + k)))"
   then show "i \<le> Suc j \<and> \<not> Enabled (AcceptorAction a) (f (Suc j)) \<longrightarrow>
-               (\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k)))"
+               (\<exists>k\<ge>i. k < Suc j \<and> three_cases a (f k) (f (1 + k)))"
   proof (cases "Enabled (AcceptorAction a) (f j)"; clarify)
     case True
     assume "i \<le> Suc j"
        and "\<not> Enabled (AcceptorAction a) (f (Suc j))"
-    then show "\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
-      sorry
+    then show "\<exists>k\<ge>i. k < Suc j \<and> three_cases a (f k) (f (1 + k))"
+      by (metis Preserves_AcceptorAction_Disabled_Three_Cases True assms(1) assms(2) le_SucE lessI plus_1_eq_Suc)
   next
     case False
     assume "i \<le> Suc j"
        and "\<not> Enabled (AcceptorAction a) (f (Suc j))"
     have "i \<noteq> Suc j"
-      using \<open>\<not> Enabled (AcceptorAction a) (f (Suc j))\<close> assms(3) by blast
-    then show "\<exists>k\<ge>i. k < Suc j \<and> Process1a a (M1a b) (f k) (f (1 + k))"
-      by (meson False \<open>i \<le> Suc j\<close> \<open>i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow> (\<exists>k\<ge>i. k < j \<and> Process1a a (M1a b) (f k) (f (1 + k)))\<close> le_SucE less_Suc_eq)
+      using \<open>\<not> Enabled (AcceptorAction a) (f (Suc j))\<close> assms(2) by blast
+    then show "\<exists>k\<ge>i. k < Suc j \<and> three_cases a (f k) (f (1 + k))"
+      by (meson False \<open>i \<le> Suc j\<close> \<open>i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow> (\<exists>k\<ge>i. k < j \<and> three_cases a (f k) (f (1 + k)))\<close> le_SucE less_Suc_eq)
   qed
 qed
+
+fun three_Os :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarrow> bool" where
+  "three_Os a st st2 = (
+           (\<exists>m. Process1a a m st st2) \<or>
+           (\<exists>m. Process1b a m st st2) \<or>
+           (Process1bLearnerLoopDone a st st2))"
+
+lemma three_Os_reduce:
+  shows "three_cases a st st2 \<longrightarrow> three_Os a st st2"
+  using three_Os.simps three_cases.simps by blast
+
+lemma from_1a_to_disabled_O:
+  assumes "Spec f"
+      and "Enabled (AcceptorAction a) (f i)"
+    shows "i \<le> j \<and> \<not> Enabled (AcceptorAction a) (f j) \<longrightarrow>
+           (\<exists>k. i \<le> k \<and> k < j \<and> three_Os a (f k) (f (1 + k)))"
+  using assms(1) assms(2) from_1a_to_disabled three_Os_reduce by blast
 
 
 lemma step_1a:
@@ -223,853 +872,6 @@ qed
 
 
 
-lemma Process1b_Not_Process1bLearnerLoopStep:
-  assumes "Process1b a ln st st2"
-  shows "\<not> Process1bLearnerLoopStep a2 ln2 st st2"
-  by (smt (z3) Process1b.elims(1) Process1bLearnerLoopStep.elims(1) Send.elims(1) assms not_Cons_self)
-
-lemma Process1b_Not_Process1a:
-  assumes "Process1b a ln st st2"
-  shows "\<not> Process1a a2 ln2 st st2"
-  by (smt (z3) MessageType.simps(2) Process1a.simps Process1b.elims(1) assms list.distinct(1) list.inject not_Cons_self)
-
-lemma Process1a_Not_Process1bLearnerLoopDone:
-  assumes "Process1a a ln st st2"
-  shows "\<not> Process1bLearnerLoopDone a2 st st2"
-  by (smt (verit, best) Process1a.elims(2) Process1bLearnerLoopDone.elims(1) Send.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(6))
-
-lemma Process1b_Not_Process1bLearnerLoopDone:
-  assumes "Process1b a ln st st2"
-  shows "\<not> Process1bLearnerLoopDone a2 st st2"
-  by (metis (mono_tags, lifting) Process1b.elims(2) Process1bLearnerLoopDone.elims(2) Store_acc.simps assms not_Cons_self select_convs(2) surjective update_convs(6))
-
-
-lemma Process1a_Not_ProposerSendAction :
-  assumes "Process1a a m st st2"
-    shows "\<not> ProposerSendAction st st2"
-  by (metis (no_types, lifting) Process1a.elims(2) ProposerSendAction.elims(2) Send1a.elims(2) Store_acc.elims(2) assms not_Cons_self2 select_convs(2) surjective update_convs(1))
-
-lemma Process1a_Not_LearnerProcessAction :
-  assumes "Process1a a m st st2"
-    shows "\<not> LearnerProcessAction st st2"
-  by (smt (verit) LearnerProcessAction.elims LearnerAction.elims(2) LearnerDecide.elims(2) LearnerRecv.elims(2) Process1a.elims(2) Send.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(3) update_convs(8))
-
-lemma Process1a_Not_FakeAcceptorAction :
-  assumes "Process1a a m st st2"
-    shows "\<not> FakeAcceptorAction st st2"
-  by (metis FakeAcceptorAction.simps FakeSend1b.elims(1) FakeSend2a.simps Process1a.elims(2) Store_acc.elims(2) assms not_Cons_self2 select_convs(2) surjective update_convs(1))
-
-lemma Process1a_Next_Implies_AcceptorAction:
-  assumes "Next st st2"
-      and "Process1a a m st st2"
-    shows "AcceptorAction a st st2"
-proof -
-  have "AcceptorProcessAction st st2"
-    using Next.simps Process1a_Not_FakeAcceptorAction Process1a_Not_LearnerProcessAction Process1a_Not_ProposerSendAction assms(1) assms(2) by blast
-  then show ?thesis
-    unfolding AcceptorProcessAction.simps
-  proof (elim exE)
-    fix a2
-    assume "AcceptorAction a2 st st2"
-    have "\<exists>m \<in> set (msgs st). Process1a a2 m st st2 \<or> Process1b a2 m st st2"
-      by (metis AcceptorAction.simps Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(1) Process1b_Not_Process1a \<open>AcceptorAction a2 st st2\<close> assms(2))
-    have "Process1a a2 m st st2"
-      by (metis Process1a.elims(2) Process1b_Not_Process1a Store_acc.elims(2) \<open>\<exists>m\<in>set (msgs st). Process1a a2 m st st2 \<or> Process1b a2 m st st2\<close> assms(2) not_Cons_self2)
-    have "a = a2"
-      by (metis Process1a.simps Store_acc.elims(2) \<open>Process1a a2 m st st2\<close> assms(2) not_Cons_self)
-    then show ?thesis
-      using \<open>AcceptorAction a2 st st2\<close> by blast
-  qed
-qed
-
-
-
-
-
-lemma Process1B_Not_ProposerSendAction :
-  assumes "Process1b a m st st2"
-    shows "\<not> ProposerSendAction st st2"
-proof -
-  have "recent_msgs st2 a \<noteq> recent_msgs st a"
-    using assms by auto
-  then show ?thesis
-    by force
-qed
-
-lemma Process1b_Not_LearnerProcessAction :
-  assumes "Process1b a m st st2"
-    shows "\<not> LearnerProcessAction st st2"
-proof -
-  have "recent_msgs st2 a \<noteq> recent_msgs st a"
-    using assms by auto
-  then show ?thesis
-    by force
-qed
-
-lemma Process1b_Not_FakeSend1b :
-  assumes "Process1b a m st st2"
-    shows "\<not> FakeSend1b a2 st st2"
-  by (smt (z3) FakeSend1b.elims(1) Process1b.elims(1) assms not_Cons_self select_convs(4) surjective update_convs(1))
-
-lemma Process1b_Not_FakeSend2a :
-  assumes "Process1b a m st st2"
-    shows "\<not> FakeSend2a a2 st st2"
-proof -
-  have "recent_msgs st2 a \<noteq> recent_msgs st a"
-    using assms by auto
-  then show ?thesis
-    by (metis FakeSend2a.simps select_convs(4) surjective update_convs(1))
-qed
-
-lemma Process1b_Not_FakeAcceptorAction :
-  assumes "Process1b a m st st2"
-    shows "\<not> FakeAcceptorAction st st2"
-  using FakeAcceptorAction.simps Process1b_Not_FakeSend1b Process1b_Not_FakeSend2a assms by presburger
-
-lemma Process1b_Next_Implies_AcceptorAction:
-  assumes "Next st st2"
-      and "Process1b a m st st2"
-    shows "AcceptorAction a st st2"
-proof -
-  have "AcceptorProcessAction st st2"
-    using Next.simps Process1B_Not_ProposerSendAction Process1b_Not_FakeAcceptorAction Process1b_Not_LearnerProcessAction assms(1) assms(2) by blast
-  then show ?thesis
-    unfolding AcceptorProcessAction.simps
-    proof (elim exE)
-    fix a2
-    assume "AcceptorAction a2 st st2"
-    then show ?thesis
-    proof (cases "queued_msg st a = None")
-      case True
-      then show ?thesis
-        by (metis AcceptorAction.simps Process1b.elims(2) Process1bLearnerLoop.elims(2) Process1b_Not_Process1a Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep \<open>AcceptorAction a2 st st2\<close> assms(2) not_Cons_self)
-    next
-      case False
-      then show ?thesis
-      proof -
-        have f1: "\<And>aa. aa \<noteq> a \<or> queued_msg st2 aa = None"
-          by (meson Process1b.elims(2) assms(2))
-        have "\<forall>s a sa. \<exists>p. \<forall>sb aa sc ab sd se. (\<not> two_a_lrn_loop sb aa \<or> \<not> AcceptorAction aa sb sc \<or> Process1bLearnerLoop aa sb sc) \<and> (\<not> AcceptorAction ab sd se \<or> two_a_lrn_loop sd ab \<or> queued_msg sd ab = None \<or> Process1b ab (the (queued_msg sd ab)) sd se) \<and> (queued_msg s a \<noteq> None \<or> \<not> AcceptorAction a s sa \<or> two_a_lrn_loop s a \<or> Process1b a p s sa \<or> Process1a a p s sa)"
-          using AcceptorAction.simps by blast
-        then obtain pp :: "State \<Rightarrow> Acceptor \<Rightarrow> State \<Rightarrow> PreMessage" where
-          f2: "\<And>s a sa aa sb sc sd ab se. (\<not> two_a_lrn_loop s a \<or> \<not> AcceptorAction a s sa \<or> Process1bLearnerLoop a s sa) \<and> (\<not> AcceptorAction aa sb sc \<or> two_a_lrn_loop sb aa \<or> queued_msg sb aa = None \<or> Process1b aa (the (queued_msg sb aa)) sb sc) \<and> (queued_msg sd ab \<noteq> None \<or> \<not> AcceptorAction ab sd se \<or> two_a_lrn_loop sd ab \<or> Process1b ab (pp sd ab se) sd se \<or> Process1a ab (pp sd ab se) sd se)"
-          by metis
-        then have "\<not> two_a_lrn_loop st a2"
-          by (metis (no_types) Process1bLearnerLoop.simps Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep \<open>AcceptorAction a2 st st2\<close> assms(2))
-        then have "Process1a a2 (pp st a2 st2) st st2 \<or> a2 = a"
-          using f2 f1 by (metis (full_types) False Process1b.elims(2) \<open>AcceptorAction a2 st st2\<close>)
-        then have "a2 = a"
-          using f1 by (metis (no_types) False Process1a.elims(2))
-        then show ?thesis
-          using \<open>AcceptorAction a2 st st2\<close> by force
-      qed
-    qed
-  qed
-qed
-
-
-
-
-lemma Process1bLearnerLoopDone_Not_ProposerSendAction :
-  assumes "Process1bLearnerLoopDone a st st2"
-    shows "\<not> ProposerSendAction st st2"
-  by (metis (no_types, lifting) Process1bLearnerLoopDone.elims(1) ProposerSendAction.elims(2) Send1a.elims(2) assms not_Cons_self select_convs(1) surjective update_convs(1) update_convs(6))
-
-lemma Process1bLearnerLoopDone_Not_LearnerRecv :
-  assumes "Process1bLearnerLoopDone a st st2"
-    shows "\<not> LearnerRecv ln m st st2"
-  by (smt (verit, best) LearnerRecv.elims(2) Process1bLearnerLoopDone.elims(1) assms ext_inject not_Cons_self2 surjective update_convs(3) update_convs(6))
-
-lemma Process1bLearnerLoopDone_Not_LearnerDecide :
-  assumes "Process1bLearnerLoopDone a st st2"
-      and "st \<noteq> st2"
-    shows "\<not> LearnerDecide ln blt val st st2"
-  by (metis (no_types, lifting) LearnerDecide.elims(1) Process1bLearnerLoopDone.elims(2) assms(1) assms(2) select_convs(8) surjective update_convs(6) update_convs(8))
-
-lemma Process1bLearnerLoopDone_Not_LearnerProcessAction :
-  assumes "Process1bLearnerLoopDone a st st2"
-      and "st \<noteq> st2"
-    shows "\<not> LearnerProcessAction st st2"
-  by (meson LearnerProcessAction.elims LearnerAction.elims(2) Process1bLearnerLoopDone_Not_LearnerDecide Process1bLearnerLoopDone_Not_LearnerRecv assms)
-
-lemma Process1bLearnerLoopDone_Not_FakeSend1b :
-  assumes "Process1bLearnerLoopDone a st st2"
-    shows "\<not> FakeSend1b a2 st st2"
-  by (smt (verit, ccfv_threshold) FakeSend1b.elims(1) Process1bLearnerLoopDone.elims(2) assms ext_inject not_Cons_self2 surjective update_convs(1) update_convs(6))
-
-lemma Process1bLearnerLoopDone_Not_FakeSend2a :
-  assumes "Process1bLearnerLoopDone a st st2"
-    shows "\<not> FakeSend2a a2 st st2"
-  by (smt (verit, ccfv_threshold) FakeSend2a.elims(2) Process1bLearnerLoopDone.simps assms ext_inject not_Cons_self2 surjective update_convs(1) update_convs(6))
-
-lemma Process1bLearnerLoopDone_Not_FakeAcceptorAction :
-  assumes "Process1bLearnerLoopDone a st st2"
-    shows "\<not> FakeAcceptorAction st st2"
-  using FakeAcceptorAction.simps Process1bLearnerLoopDone_Not_FakeSend1b Process1bLearnerLoopDone_Not_FakeSend2a assms by blast
-
-lemma Process1bLearnerLoopDone_Next_Implies_AcceptorAction:
-  assumes "Next st st2"
-      and "Process1bLearnerLoopDone a st st2"
-      and "st \<noteq> st2"
-    shows "AcceptorAction a st st2"
-proof -
-  have "\<not> two_a_lrn_loop st2 a"
-    using assms(2) by auto
-  have "two_a_lrn_loop st \<noteq> two_a_lrn_loop st2"
-    using assms(2) assms(3) by fastforce
-  have "\<forall>A. A \<noteq> a \<longrightarrow> two_a_lrn_loop st A = two_a_lrn_loop st2 A"
-    using assms(2) by auto
-  have "two_a_lrn_loop st a \<noteq> two_a_lrn_loop st2 a"
-    using \<open>\<forall>A. A \<noteq> a \<longrightarrow> two_a_lrn_loop st A = two_a_lrn_loop st2 A\<close> \<open>two_a_lrn_loop st \<noteq> two_a_lrn_loop st2\<close> by auto
-  have "two_a_lrn_loop st a"
-    using \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>two_a_lrn_loop st a \<noteq> two_a_lrn_loop st2 a\<close> by blast
-  have "AcceptorProcessAction st st2"
-    using Next.simps Process1bLearnerLoopDone_Not_FakeAcceptorAction Process1bLearnerLoopDone_Not_LearnerProcessAction Process1bLearnerLoopDone_Not_ProposerSendAction assms(1) assms(2) assms(3) by blast
-  then show ?thesis
-    unfolding AcceptorProcessAction.simps
-  proof (elim exE)
-    fix a2
-    assume "AcceptorAction a2 st st2"
-    have "Process1bLearnerLoopDone a2 st st2"
-      by (metis AcceptorAction.simps Process1a_Not_Process1bLearnerLoopDone Process1bLearnerLoop.simps Process1bLearnerLoopStep.elims(2) Process1b_Not_Process1bLearnerLoopDone \<open>AcceptorAction a2 st st2\<close> \<open>two_a_lrn_loop st \<noteq> two_a_lrn_loop st2\<close> assms(2))
-    have "a = a2"
-      using \<open>Process1bLearnerLoopDone a2 st st2\<close> \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>two_a_lrn_loop st a\<close> surjective by fastforce
-    show ?thesis
-      using \<open>AcceptorAction a2 st st2\<close> \<open>a = a2\<close> by blast
-  qed
-qed
-
-
-lemma Process1a_not_looping_Next:
-  assumes "Next st st2"
-  shows "(\<exists>m\<in>set (msgs st). Process1a a m st st2) \<longrightarrow> \<not> two_a_lrn_loop st a"
-  by (meson AcceptorAction.elims(2) Process1a_Next_Implies_AcceptorAction Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(2) assms)
-
-lemma Process1a_not_looping:
-  assumes "Spec f"
-  shows "(\<exists>m\<in>set (msgs (f i)). Process1a a m (f i) (f (1 + i))) \<longrightarrow> \<not> two_a_lrn_loop (f i) a"
-proof (induction i)
-  case 0
-  then show ?case
-    by (metis Init.simps Spec.simps assms select_convs(6))
-next
-  case (Suc i)
-  then show ?case
-    by (metis AcceptorAction.elims(2) Process1a.elims(2) Process1a_Next_Implies_AcceptorAction Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.elims(2) Send.elims(2) Spec.elims(2) assms not_Cons_self plus_1_eq_Suc)
-qed
-
-lemma no_queue_during_loop_Next:
-  assumes "Next st st2" 
-      and "two_a_lrn_loop st a \<longrightarrow> queued_msg st a = None"
-      and "(\<exists>m\<in>set (msgs st). Process1a a m st st2) \<longrightarrow> \<not> two_a_lrn_loop st a"
-    shows "two_a_lrn_loop st2 a \<longrightarrow> queued_msg st2 a = None"
-proof -
-  have css: "ProposerSendAction st st2 \<or>
-        (\<exists>A :: Acceptor. is_safe A
-                    \<and> queued_msg st A = None 
-                    \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
-        (\<exists>A :: Acceptor. is_safe A
-                      \<and> queued_msg st A \<noteq> None 
-                      \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
-        (\<exists>A :: Acceptor. is_safe A
-                      \<and> queued_msg st A = None 
-                      \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
-        (\<exists>A :: Acceptor. is_safe A
-                      \<and> two_a_lrn_loop st A 
-                      \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
-        (\<exists>A :: Acceptor. is_safe A
-                      \<and> two_a_lrn_loop st A 
-                      \<and> Process1bLearnerLoopDone A st st2) \<or>
-        LearnerProcessAction st st2 \<or>
-        (\<exists>A :: Acceptor. \<not> (is_safe A)
-                      \<and> FakeSend1b A st st2) \<or>
-        (\<exists>A :: Acceptor. \<not> (is_safe A)
-                      \<and> FakeSend2a A st st2)
-        "
-        using assms next_split by presburger
-    then show ?thesis
-    proof (elim disjE)
-      assume "ProposerSendAction st st2"
-      then show ?thesis
-        using assms(2) by auto
-    next
-      assume "\<exists>A. is_safe A \<and>
-                queued_msg st A = None \<and>
-                (\<exists>m\<in>set (msgs st).
-                    Process1a A m st st2)"
-      then show ?thesis
-      proof (clarify)
-        fix A m
-        assume "is_safe A"
-           and "queued_msg st A = None"
-           and "m \<in> set (msgs st)"
-           and "Process1a A m st st2"
-           and "two_a_lrn_loop st2 a"
-        then show "queued_msg st2 a = None"
-        proof (cases "A = a")
-          case True
-          define new1b where "new1b = M1b A (m # recent_msgs st A)"
-          show ?thesis
-          proof (cases "WellFormed st new1b")
-            case True
-            then show ?thesis
-              by (metis Process1a.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1a A m st st2)\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2) assms(3))
-          next
-            case False
-            then show ?thesis
-              by (metis Process1a.elims(2) True \<open>Process1a A m st st2\<close> \<open>queued_msg st A = None\<close> new1b_def)
-          qed
-        next
-          case False
-          then show ?thesis
-            by (metis Process1a.elims(2) \<open>Process1a A m st st2\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2))
-        qed
-      qed
-    next
-      assume "\<exists>A :: Acceptor. is_safe A
-                        \<and> queued_msg st A \<noteq> None 
-                        \<and> Process1b A (the (queued_msg st A)) st st2"
-      then show ?thesis
-      proof -
-        show ?thesis
-          using \<open>\<exists>A. is_safe A \<and> queued_msg st A \<noteq> None \<and> Process1b A (the (queued_msg st A)) st st2\<close> assms(2) by force
-      qed
-    next
-      assume "\<exists>A :: Acceptor. is_safe A
-                  \<and> queued_msg st A = None 
-                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
-      then show ?thesis
-      proof -
-        show ?thesis
-          using \<open>\<exists>A. is_safe A \<and> queued_msg st A = None \<and> (\<exists>m\<in>set (msgs st). Process1b A m st st2)\<close> assms(2) by fastforce
-      qed
-    next
-      assume "\<exists>A :: Acceptor. is_safe A
-                        \<and> two_a_lrn_loop st A 
-                        \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)"
-      then show ?thesis
-        by (metis Process1bLearnerLoopStep.elims(2) assms(2))
-    next
-      assume "\<exists>A. is_safe A \<and>
-        two_a_lrn_loop st A \<and>
-        Process1bLearnerLoopDone A st st2"
-      then show ?thesis
-      proof (clarify)
-        fix A
-        assume "is_safe A"
-           and "two_a_lrn_loop st A"
-           and "Process1bLearnerLoopDone A st st2"
-           and "two_a_lrn_loop st2 a"
-        then show "queued_msg st2 a = None"
-        proof (cases "A = a")
-          case True
-          then show ?thesis
-            using \<open>Process1bLearnerLoopDone A st st2\<close> \<open>two_a_lrn_loop st A\<close> assms(2) by auto
-        next
-          case False
-          then show ?thesis
-            using \<open>Process1bLearnerLoopDone A st st2\<close> \<open>two_a_lrn_loop st2 a\<close> assms(2) by auto
-        qed
-      qed
-    next
-      assume "LearnerProcessAction st st2"
-      then show ?thesis
-        by (smt (verit, del_insts) LearnerProcessAction.elims LearnerAction.elims(2) LearnerDecide.simps LearnerRecv.elims(2) assms(2) ext_inject surjective update_convs(3) update_convs(8))
-    next
-      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
-      show ?thesis
-        by (metis FakeSend1b.elims(1) \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> assms(2) ext_inject surjective update_convs(1))
-    next
-      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
-      then show ?thesis
-        by (metis FakeSend2a.simps assms(2) ext_inject surjective update_convs(1))
-    qed
-qed
-
-lemma no_queue_during_loop:
-  assumes "Spec f"
-  shows "two_a_lrn_loop (f i) a \<longrightarrow> queued_msg (f i) a = None"
-proof (induction i)
-  case 0
-  then show ?case
-    by (metis Init.elims Spec.elims(2) assms ext_inject surjective)
-next
-  case (Suc i)
-  then show ?case
-    by (metis Process1a_not_looping Spec.elims(2) assms no_queue_during_loop_Next plus_1_eq_Suc)
-qed
-
-lemma ballot_present:
-  shows "M1a b \<in> set l \<longrightarrow> b \<in> (Get1a ` set l)"
-proof (induction l)
-  case Nil
-  then show ?case 
-    by simp
-next
-  case (Cons a l)
-  then show ?case
-  proof (cases "a = M1a b")
-    case True
-    have "b \<in> Get1a ` set (M1a b # l)"
-      by auto
-    show ?thesis
-      using True \<open>b \<in> Get1a ` set (M1a b # l)\<close> by presburger
-  next
-    case False
-    then show ?thesis
-      using local.Cons by auto
-  qed
-qed
-
-lemma new_bal_unknown:
-  assumes "\<forall>a \<in> Q. the (MaxBalO st a) < bal x"
-      and "type x = T1a"
-    shows "\<forall>a \<in> Q. x \<notin> set (known_msgs_acc st a)"
-proof (clarify)
-  fix a
-  assume "a \<in> Q"
-     and "x \<in> set (known_msgs_acc st a)"
-  then show False
-  proof (cases "known_msgs_acc st a")
-    case Nil
-    then show ?thesis
-      using \<open>x \<in> set (known_msgs_acc st a)\<close> by auto
-  next
-    case (Cons m list)
-    then show ?thesis 
-    proof (cases x)
-      case (M1a b)
-      have "Max (Get1a ` set (known_msgs_acc st a)) < b"
-        using M1a \<open>a \<in> Q\<close> assms(1) local.Cons by fastforce
-      have "b \<in> Get1a ` set (known_msgs_acc st a)"
-        using M1a \<open>x \<in> set (known_msgs_acc st a)\<close> ballot_present by blast
-      have "b \<le> Max (set (map Get1a (known_msgs_acc st a)))"
-        using \<open>b \<in> Get1a ` set (known_msgs_acc st a)\<close> by auto
-      have "b \<le> Max (Get1a ` set (known_msgs_acc st a))"
-        using \<open>b \<le> Max (set (map Get1a (known_msgs_acc st a)))\<close> by auto
-      show ?thesis
-        using \<open>Max (Get1a ` set (known_msgs_acc st a)) < b\<close> \<open>b \<le> Max (Get1a ` set (known_msgs_acc st a))\<close> verit_comp_simplify1(3) by blast
-    next
-      case (M1b _ _)
-      then show ?thesis
-        using assms(2) by auto
-    next
-      case (M2a _ _ _)
-      then show ?thesis 
-        using assms(2) by auto
-    qed
-  qed
-qed
-
-lemma Process1a_Enables_Action:
-  assumes "Enabled (Process1a a x) st"
-      and "is_safe a"
-      and "\<not> two_a_lrn_loop st a"
-      and "queued_msg st a = None"
-      and "x \<in> set (msgs st)"
-    shows "Enabled (AcceptorAction a) st"
-  using AcceptorAction_NotEnabled Process1a_Enabled assms(1) assms(2) assms(4) assms(5) by blast
-
-lemma no_acceptor_no_Process1a:
-  assumes "\<not> Enabled (AcceptorAction a) st"
-      and "is_safe a"
-      and "queued_msg st a = None"
-      and "x \<in> set (msgs st)"
-    shows "\<not> Enabled (Process1a a x) st"
-  using AcceptorAction_NotEnabled Process1a_Enables_Action assms(1) assms(2) assms(3) assms(4) by blast
-
-lemma Process1a_Req_known_msgs:
-  assumes "Spec f"
-      and "Process1a a x (f (i - 1)) (f i)"
-    shows "x \<in> set (known_msgs_acc (f i) a)"
-  by (metis Process1a.elims(2) Store_acc.elims(2) assms(2) in_set_member member_rec(1))
-
-lemma Process1a_Req_msgs:
-  assumes "Spec f"
-      and "is_safe a"
-      and "Process1a a x (f (i - 1)) (f i)"
-    shows "x \<in> set (msgs (f i))"
-proof -
-  have "x \<in> set (known_msgs_acc (f i) a)"
-    by (metis Process1a.elims(2) Store_acc.elims(2) assms(3) in_set_member member_rec(1))
-  have q: "(\<forall>m \<in> set (known_msgs_acc (f i) a). 
-          m \<in> set (msgs (f i)) \<and>
-          Proper_acc (f i) a m \<and>
-          WellFormed (f i) m \<and>
-          Tran m \<subseteq> set (known_msgs_acc (f i) a) \<and>
-          (\<exists>b :: Ballot. B m b)
-    )"
-    by (meson B.elims(3) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult assms(1) assms(2))
-  show ?thesis
-    by (simp add: \<open>x \<in> set (known_msgs_acc (f i) a)\<close> q)
-qed
-
-
-lemma ProposerSendAction_Preserves_AcceptorAction:
-  assumes "ProposerSendAction st st2"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "ProposerSendAction st st2"
-    using assms(1) by blast
-  then show ?thesis
-    unfolding ProposerSendAction.simps
-  proof (elim exE)
-    fix blt
-    assume "Send1a blt st st2"
-    have "is_safe a"
-      using AcceptorAction_Enabled assms(2) by presburger
-    show ?thesis
-    proof (cases "two_a_lrn_loop st a")
-      case True
-      have "two_a_lrn_loop st2 a"
-        using True \<open>Send1a blt st st2\<close> by fastforce
-      show ?thesis
-        using AcceptorAction_Enabled \<open>is_safe a\<close> \<open>two_a_lrn_loop st2 a\<close> by blast
-    next
-      case False
-      have "\<not> two_a_lrn_loop st2 a"
-        using False \<open>Send1a blt st st2\<close> by fastforce
-      then show ?thesis
-      proof (cases "queued_msg st a = None")
-        case True
-        have "\<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)"
-          using AcceptorAction_NotEnabled False True \<open>is_safe a\<close> assms(2) by blast
-        then show ?thesis
-        proof (clarify)
-          fix m
-          assume "m \<in> set (msgs st)"
-             and "Recv_acc st a m"
-             and "type m = T1a \<or> type m = T1b"
-          have "m \<in> set (msgs st2)"
-            by (meson Next.elims(3) \<open>m \<in> set (msgs st)\<close> assms(1) next_msgs_preserved)
-          have "Recv_acc st2 a m"
-            by (smt (verit) Proper_acc.simps Recv_acc.elims(1) Send1a.simps WellFormed_monotone \<open>Recv_acc st a m\<close> \<open>Send1a blt st st2\<close> select_convs(2) select_convs(9) surjective update_convs(1))
-          have q0: "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-            using \<open>Recv_acc st2 a m\<close> \<open>m \<in> set (msgs st2)\<close> \<open>type m = T1a \<or> type m = T1b\<close> by blast
-          have q1: "(queued_msg st a = None \<and> (
-                      \<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)
-                    ))"
-            using True \<open>Recv_acc st a m\<close> \<open>m \<in> set (msgs st)\<close> \<open>type m = T1a \<or> type m = T1b\<close> by blast
-          show ?thesis
-            by (metis AcceptorAction_NotEnabled Send1a.elims(2) True \<open>Send1a blt st st2\<close> \<open>is_safe a\<close> ext_inject q0 surjective update_convs(1))
-        qed
-      next
-        case False
-        have "type (the (queued_msg st2 a)) = T1b \<and>
-               Recv_acc st2 a (the (queued_msg st2 a))"
-          by (smt (verit, ccfv_SIG) AcceptorAction_NotEnabled False Proper_acc.elims(1) Recv_acc.elims(1) Send1a.elims(2) WellFormed_monotone \<open>Send1a blt st st2\<close> \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>is_safe a\<close> assms(2) ext_inject surjective update_convs(1))
-        show ?thesis
-          by (metis AcceptorAction_NotEnabled False Send1a.elims(1) \<open>Send1a blt st st2\<close> \<open>is_safe a\<close> \<open>type (the (queued_msg st2 a)) = T1b \<and> Recv_acc st2 a (the (queued_msg st2 a))\<close> select_convs(5) surjective update_convs(1))
-      qed
-    qed
-  qed
-qed
-
-lemma FakeAcceptorAction_Preserves_AcceptorAction:
-  assumes "FakeAcceptorAction st st2"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "FakeAcceptorAction st st2"
-    using assms(1) by blast
-  then show ?thesis
-    unfolding FakeAcceptorAction.simps
-  proof (clarify)
-    fix a2
-    have "is_safe a"
-      using AcceptorAction_Enabled assms(2) by presburger
-    assume "\<not> is_safe a2"
-    assume "FakeSend1b a2 st st2 \<or> FakeSend2a a2 st st2"
-    have "two_a_lrn_loop st2 a = two_a_lrn_loop st a"
-      by (metis FakeSend1b.elims(1) FakeSend2a.elims(2) \<open>FakeSend1b a2 st st2 \<or> FakeSend2a a2 st st2\<close> select_convs(6) surjective update_convs(1))
-    have "known_msgs_acc st2 a = known_msgs_acc st a"
-      by (metis FakeSend1b.simps FakeSend2a.simps \<open>FakeSend1b a2 st st2 \<or> FakeSend2a a2 st st2\<close> select_convs(2) surjective update_convs(1))
-    have "recent_msgs st2 a = recent_msgs st a"
-      by (metis FakeSend1b.elims(1) FakeSend2a.elims(2) \<open>FakeSend1b a2 st st2 \<or> FakeSend2a a2 st st2\<close> select_convs(4) surjective update_convs(1))
-    have "queued_msg st2 a = queued_msg st a"
-      by (metis FakeSend1b.elims(1) FakeSend2a.simps \<open>FakeSend1b a2 st st2 \<or> FakeSend2a a2 st st2\<close> ext_inject surjective update_convs(1))
-    show ?thesis
-    proof (cases "two_a_lrn_loop st a")
-      case True
-      show ?thesis
-        using AcceptorAction_NotEnabled True \<open>is_safe a\<close> \<open>two_a_lrn_loop st2 a = two_a_lrn_loop st a\<close> by blast
-    next
-      case False
-      show ?thesis
-      proof (cases "queued_msg st a = None")
-        case True
-        have "\<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)"
-          using AcceptorAction_NotEnabled False True \<open>is_safe a\<close> assms(2) by blast
-        then show ?thesis
-        proof (clarify)
-          fix m
-          assume "m \<in> set (msgs st)"
-             and "Recv_acc st a m"
-             and "type m = T1a \<or> type m = T1b"
-          have "m \<in> set (msgs st2)"
-            by (meson Next.elims(3) \<open>m \<in> set (msgs st)\<close> assms(1) next_msgs_preserved)
-          have "Recv_acc st2 a m"
-            by (metis MessageType.distinct(3) MessageType.distinct(5) Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) WellFormed.elims(1) \<open>Recv_acc st a m\<close> \<open>known_msgs_acc st2 a = known_msgs_acc st a\<close> \<open>type m = T1a \<or> type m = T1b\<close>)
-          have q: "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-            using \<open>Recv_acc st2 a m\<close> \<open>m \<in> set (msgs st2)\<close> \<open>type m = T1a \<or> type m = T1b\<close> by blast
-          show ?thesis
-            by (metis AcceptorAction_NotEnabled True \<open>is_safe a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> q)
-        qed
-      next
-        have TwoFalse: "\<not> two_a_lrn_loop st a"
-          by (simp add: False)
-        case False
-        have "type (the (queued_msg st2 a)) = T1b \<and>
-               Recv_acc st2 a (the (queued_msg st2 a))"
-          by (smt (verit) AcceptorAction_NotEnabled False MessageType.distinct(5) Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) TwoFalse WellFormed.elims(1) \<open>is_safe a\<close> \<open>known_msgs_acc st2 a = known_msgs_acc st a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> assms(2))
-        show ?thesis
-          using AcceptorAction_NotEnabled False \<open>is_safe a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> \<open>type (the (queued_msg st2 a)) = T1b \<and> Recv_acc st2 a (the (queued_msg st2 a))\<close> by presburger
-      qed
-    qed
-  qed
-qed
-
-lemma LearnerAction_Preserves_AcceptorAction:
-  assumes "LearnerProcessAction st st2"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "LearnerProcessAction st st2"
-    using assms(1) by blast
-  then show ?thesis
-    unfolding LearnerProcessAction.simps LearnerAction.simps
-  proof (clarify)
-    fix ln
-    have "is_safe a"
-      using AcceptorAction_Enabled assms(2) by presburger
-    assume "(\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2) \<or>
-            (\<exists>blt val. LearnerDecide ln blt val st st2)"
-    have "two_a_lrn_loop st2 a = two_a_lrn_loop st a"
-      by (metis (no_types, lifting) LearnerDecide.elims(1) LearnerRecv.elims(1) \<open>(\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2) \<or> (\<exists>blt val. LearnerDecide ln blt val st st2)\<close> select_convs(6) surjective update_convs(3) update_convs(8))
-    have "known_msgs_acc st2 a = known_msgs_acc st a"
-      by (metis (no_types, lifting) LearnerDecide.elims(2) LearnerRecv.elims(2) \<open>(\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2) \<or> (\<exists>blt val. LearnerDecide ln blt val st st2)\<close> select_convs(2) surjective update_convs(3) update_convs(8))
-    have "recent_msgs st2 a = recent_msgs st a"
-      by (metis (no_types, lifting) LearnerDecide.elims(1) LearnerRecv.elims(1) \<open>(\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2) \<or> (\<exists>blt val. LearnerDecide ln blt val st st2)\<close> select_convs(4) surjective update_convs(3) update_convs(8))
-    have "queued_msg st2 a = queued_msg st a"
-      by (metis (no_types, lifting) LearnerDecide.elims(2) LearnerRecv.elims(2) \<open>(\<exists>m\<in>set (msgs st). LearnerRecv ln m st st2) \<or> (\<exists>blt val. LearnerDecide ln blt val st st2)\<close> ext_inject surjective update_convs(3) update_convs(8))
-    show ?thesis
-    proof (cases "two_a_lrn_loop st a")
-      case True
-      show ?thesis
-        using AcceptorAction_NotEnabled True \<open>is_safe a\<close> \<open>two_a_lrn_loop st2 a = two_a_lrn_loop st a\<close> by blast
-    next
-      case False
-      show ?thesis
-      proof (cases "queued_msg st a = None")
-        case True
-        have "\<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b)"
-          using AcceptorAction_NotEnabled False True \<open>is_safe a\<close> assms(2) by blast
-        then show ?thesis
-        proof (clarify)
-          fix m
-          assume "m \<in> set (msgs st)"
-             and "Recv_acc st a m"
-             and "type m = T1a \<or> type m = T1b"
-          have "m \<in> set (msgs st2)"
-            by (meson Next.elims(3) \<open>m \<in> set (msgs st)\<close> assms(1) next_msgs_preserved)
-          have "Recv_acc st2 a m"
-            by (metis MessageType.distinct(3) MessageType.distinct(5) Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) WellFormed.elims(1) \<open>Recv_acc st a m\<close> \<open>known_msgs_acc st2 a = known_msgs_acc st a\<close> \<open>type m = T1a \<or> type m = T1b\<close>)
-          have q: "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-            using \<open>Recv_acc st2 a m\<close> \<open>m \<in> set (msgs st2)\<close> \<open>type m = T1a \<or> type m = T1b\<close> by blast
-          show ?thesis
-            by (metis AcceptorAction_NotEnabled True \<open>is_safe a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> q)
-        qed
-      next
-        have TwoFalse: "\<not> two_a_lrn_loop st a"
-          by (simp add: False)
-        case False
-        have "type (the (queued_msg st2 a)) = T1b \<and>
-               Recv_acc st2 a (the (queued_msg st2 a))"
-          by (smt (verit) AcceptorAction_NotEnabled False MessageType.distinct(5) Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) TwoFalse WellFormed.elims(1) \<open>is_safe a\<close> \<open>known_msgs_acc st2 a = known_msgs_acc st a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> assms(2))
-        show ?thesis
-          using AcceptorAction_NotEnabled False \<open>is_safe a\<close> \<open>queued_msg st2 a = queued_msg st a\<close> \<open>type (the (queued_msg st2 a)) = T1b \<and> Recv_acc st2 a (the (queued_msg st2 a))\<close> by presburger
-      qed
-    qed
-  qed
-qed
-
-lemma Other_Process1a_Preserves_AcceptorAction:
-  assumes "Process1a A m st st2"
-      and "A \<noteq> a"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "recent_msgs st a = recent_msgs st2 a"
-    by (metis Process1a.elims(2) assms(1) assms(2))
-  have "queued_msg st a = queued_msg st2 a"
-    by (metis Process1a.elims(2) assms(1) assms(2))
-  have "two_a_lrn_loop st a = two_a_lrn_loop st2 a"
-    by (metis Process1a.elims(2) assms(1))
-  have "\<forall>m. Recv_acc st a m = Recv_acc st2 a m"
-    by (smt (verit, best) Process1a.elims(2) Proper_acc.elims(1) Recv_acc.simps Store_acc.elims(2) WellFormed_monotone assms(1) assms(2))
-  then show ?thesis
-  proof (cases "two_a_lrn_loop st a")
-    case True
-    then show ?thesis
-      using AcceptorAction_Enabled \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3) by presburger
-  next
-    case False
-    then show ?thesis
-    proof (cases "queued_msg st2 a = None")
-      case True
-      have "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-        by (metis (full_types) AcceptorAction_Enabled False Process1a.elims(2) Send.elims(2) True \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> assms(1) assms(3) list.set_intros(2))
-      show ?thesis
-        using AcceptorAction_Enabled True \<open>\<exists>m\<in>set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)\<close> assms(3) by presburger
-    next
-      case False
-      have "queued_msg st a \<noteq> None"
-        by (simp add: False \<open>queued_msg st a = queued_msg st2 a\<close>)
-      then show ?thesis 
-        by (metis AcceptorAction_Enabled \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3))
-    qed
-  qed
-qed
-
-lemma Other_Process1b_Preserves_AcceptorAction:
-  assumes "Process1b A m st st2"
-      and "A \<noteq> a"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "recent_msgs st a = recent_msgs st2 a"
-    using assms(1) assms(2) by fastforce
-  have "queued_msg st a = queued_msg st2 a"
-    using Process1b.simps assms(1) assms(2) by presburger
-  have "two_a_lrn_loop st a = two_a_lrn_loop st2 a"
-    by (smt (verit, ccfv_SIG) Process1b.simps assms(1) assms(2))
-  have "\<forall>m. Recv_acc st a m = Recv_acc st2 a m"
-    using assms(1) assms(2) by force
-  then show ?thesis
-  proof (cases "two_a_lrn_loop st a")
-    case True
-    then show ?thesis
-      using AcceptorAction_Enabled \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3) by presburger
-  next
-    case False
-    then show ?thesis
-    proof (cases "queued_msg st2 a = None")
-      case True
-      have "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-        using AcceptorAction_Enabled False Process1b.simps True \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> assms(1) assms(3) by presburger
-      show ?thesis
-        using AcceptorAction_Enabled True \<open>\<exists>m\<in>set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)\<close> assms(3) by presburger
-    next
-      case False
-      have "queued_msg st a \<noteq> None"
-        by (simp add: False \<open>queued_msg st a = queued_msg st2 a\<close>)
-      then show ?thesis 
-        by (metis AcceptorAction_Enabled \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3))
-    qed
-  qed
-qed
-
-lemma Other_Process1bLearnerLoopStep_Preserves_AcceptorAction:
-  assumes "Process1bLearnerLoopStep A m st st2"
-      and "A \<noteq> a"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "recent_msgs st a = recent_msgs st2 a"
-    by (metis Process1bLearnerLoopStep.elims(2) assms(1) assms(2))
-  have "queued_msg st a = queued_msg st2 a"
-    by (metis Process1bLearnerLoopStep.simps assms(1))
-  have "two_a_lrn_loop st a = two_a_lrn_loop st2 a"
-    by (metis Process1bLearnerLoopStep.elims(2) assms(1))
-  have "\<forall>m. Recv_acc st a m = Recv_acc st2 a m"
-    by (smt (verit, ccfv_threshold) Process1bLearnerLoopStep.elims(2) Proper_acc.elims(1) Recv_acc.simps Store_acc.elims(2) WellFormed_monotone assms(1) assms(2))
-  then show ?thesis
-  proof (cases "two_a_lrn_loop st a")
-    case True
-    then show ?thesis
-      using AcceptorAction_Enabled \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3) by presburger
-  next
-    case False
-    then show ?thesis
-    proof (cases "queued_msg st2 a = None")
-      case True
-      have "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-        by (metis (full_types) AcceptorAction_Enabled False Process1bLearnerLoopStep.elims(2) Send.elims(2) True \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> assms(1) assms(3) list.set_intros(2))
-      show ?thesis
-        using AcceptorAction_Enabled True \<open>\<exists>m\<in>set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)\<close> assms(3) by presburger
-    next
-      case False
-      have "queued_msg st a \<noteq> None"
-        by (simp add: False \<open>queued_msg st a = queued_msg st2 a\<close>)
-      then show ?thesis 
-        by (metis AcceptorAction_Enabled \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3))
-    qed
-  qed
-qed
-
-lemma Other_Process1bLearnerLoopDone_Preserves_AcceptorAction:
-  assumes "Process1bLearnerLoopDone A st st2"
-      and "A \<noteq> a"
-      and "Enabled (AcceptorAction a) st"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "recent_msgs st a = recent_msgs st2 a"
-    using assms(1) by auto
-  have "queued_msg st a = queued_msg st2 a"
-    using assms(1) by auto
-  have "two_a_lrn_loop st a = two_a_lrn_loop st2 a"
-    using assms(1) assms(2) by auto
-  have "\<forall>m. Recv_acc st a m = Recv_acc st2 a m"
-    using assms(1) by auto
-  then show ?thesis
-  proof (cases "two_a_lrn_loop st a")
-    case True
-    then show ?thesis
-      using AcceptorAction_Enabled \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3) by presburger
-  next
-    case False
-    then show ?thesis
-    proof (cases "queued_msg st2 a = None")
-      case True
-      have "\<exists>m \<in> set (msgs st). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-        using AcceptorAction_Enabled False True \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> assms(3) by presburger
-      then have "\<exists>m \<in> set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)"
-        using assms(1) ext_inject surjective update_convs(6) by auto
-      show ?thesis
-        using AcceptorAction_Enabled True \<open>\<exists>m\<in>set (msgs st2). Recv_acc st2 a m \<and> (type m = T1a \<or> type m = T1b)\<close> assms(3) by presburger
-    next
-      case False
-      have "queued_msg st a \<noteq> None"
-        by (simp add: False \<open>queued_msg st a = queued_msg st2 a\<close>)
-      then show ?thesis 
-        by (metis AcceptorAction_Enabled \<open>\<forall>m. Recv_acc st a m = Recv_acc st2 a m\<close> \<open>queued_msg st a = queued_msg st2 a\<close> \<open>two_a_lrn_loop st a = two_a_lrn_loop st2 a\<close> assms(3))
-    qed
-  qed
-qed
-
-
-lemma only_AcceptorAction_disables_AcceptorAction:
-  assumes "Next st st2"
-      and "Enabled (AcceptorAction a) st"
-      and "\<not> Enabled (AcceptorAction a) st2"
-    shows "AcceptorAction a st st2"
-proof -
-  have "AcceptorProcessAction st st2"
-    using FakeAcceptorAction_Preserves_AcceptorAction LearnerAction_Preserves_AcceptorAction Next.simps ProposerSendAction_Preserves_AcceptorAction assms(1) assms(2) assms(3) by blast
-  then show ?thesis
-    unfolding AcceptorProcessAction.simps
-  proof (clarify)
-    fix A
-    assume "AcceptorAction A st st2"
-    have "a = A"
-      by (metis (full_types) AcceptorAction.elims(2) Other_Process1a_Preserves_AcceptorAction Other_Process1bLearnerLoopDone_Preserves_AcceptorAction Other_Process1bLearnerLoopStep_Preserves_AcceptorAction Other_Process1b_Preserves_AcceptorAction Process1bLearnerLoop.simps \<open>AcceptorAction A st st2\<close> assms(2) assms(3))
-    then show ?thesis
-      using \<open>AcceptorAction A st st2\<close> by blast 
-  qed
-qed
-
-
 
 
 
@@ -1085,270 +887,6 @@ is_safe a \<and> (
          Process1bLearnerLoop a st st2)
   )
 *)
-
-(*
-There are four actions associated with AcceptorAction
-1. Process1a
-2. Process1b
-3. Process1bLearnerLoopStep
-4. Process1bLearnerLoopDone
-
-Under what conditions can these disable AcceptorAction?
-
-Preliminary hypotheses:
-
-Process1a will enable AcceptorAction if it queues a 1b message.
-If it's activated on a non-wellformed message, it may disable AcceptorAction 
-  if that's the last pending message
-  (Note: Proven)
-
-Process1b will enable AcceptorAction when the message is a max ballot because it
-  activates two_a_lrn_loop
-  (Note: Proven)
-
-Process1bLearnerLoopStep will maintain AcceptorAction since it doesn't disable two_a_lrn_loop
-  (Note: Proven)
-
-Process1bLearnerLoopDone may disable AcceptorAction if there are no messages left to proccess.
-  (Note: Proven)
-
-*)
-
-(*
-Note: 
-  Can the well-formedness condition be weakened?
-  Can it just be the wellformedness of m?
-*)
-lemma Process1a_Preserves_AcceptorAction:
-  assumes "Spec f"
-      and "Process1a a m (f i) (f (1 + i))"
-      and "WellFormed (f i) (M1b a (m # recent_msgs (f i) a)) \<or> 
-           (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-    shows "Enabled (AcceptorAction a) (f (1 + i))"
-proof -
-  have qa: "AcceptorAction a (f i) (f (1 + i))"
-    by (metis Process1a.elims(2) Process1a_Next_Implies_AcceptorAction Process1a_Req_known_msgs Recv_acc.elims(2) Spec.elims(2) add_diff_cancel_left' assms(1) assms(2) plus_1_eq_Suc)
-  define st where "st = (f i)"
-  define st2 where "st2 = (f (1 + i))"
-  define new1b where "new1b = M1b a (m # recent_msgs st a)"
-  have "\<not> two_a_lrn_loop st2 a"
-    by (metis AcceptorAction.elims(2) Process1a.elims(2) Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.simps assms(2) qa st2_def)
-  show ?thesis
-  proof (cases "WellFormed st new1b")
-    case True
-    have "Send new1b st st2
-          \<and> (recent_msgs st2 = (
-              \<lambda>a2. if a2 = a then []
-                             else recent_msgs st a2))
-          \<and> (queued_msg st2 = (
-              \<lambda>a2. if a2 = a then Some new1b 
-                             else queued_msg st a2))"
-      by (metis (full_types, opaque_lifting) Process1a.elims(2) True assms(2) new1b_def st2_def st_def)
-    have "type new1b = T1b"
-      using new1b_def by auto
-    have "WellFormed st2 new1b"
-      by (metis MessageType.distinct(5) True WellFormed.elims(1) \<open>type new1b = T1b\<close>)
-    have "ref new1b = {m} \<union> set (recent_msgs st a)"
-      using new1b_def by auto
-    have "m \<in> set (known_msgs_acc st2 a)"
-      using Process1a_Req_known_msgs assms(1) assms(2) diff_add_inverse st2_def by presburger
-    have "\<forall>m \<in> set (recent_msgs st a). m \<in> set (known_msgs_acc st a)"
-      by (metis AcceptorAction.elims(2) RecentMsgsSpec.elims(2) RecentMsgsSpecResult assms(1) qa st_def subset_code(1))
-    have "\<forall>m \<in> set (recent_msgs st a). m \<in> set (known_msgs_acc st2 a)"
-      using \<open>\<forall>m\<in>set (recent_msgs st a). m \<in> set (known_msgs_acc st a)\<close> assms(1) known_msgs_acc_preserved le_add2 st2_def st_def by blast
-    have "Proper_acc st2 a new1b"
-      by (simp add: \<open>\<forall>m\<in>set (recent_msgs st a). m \<in> set (known_msgs_acc st2 a)\<close> \<open>m \<in> set (known_msgs_acc st2 a)\<close> new1b_def)
-    have "new1b \<notin> set (known_msgs_acc st2 a)"
-      by (metis AcceptorAction.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult Process1a.elims(2) Proper_acc.elims(2) Recv_acc.elims(2) Store_acc.elims(2) assms(1) assms(2) qa in_set_member member_rec(1) new1b_def ref.simps(2) st2_def)
-    have "Recv_acc st2 a new1b"
-      using Recv_acc.simps \<open>Proper_acc st2 a new1b\<close> \<open>WellFormed st2 new1b\<close> \<open>new1b \<notin> set (known_msgs_acc st2 a)\<close> by blast
-    show ?thesis
-      by (metis AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>Recv_acc st2 a new1b\<close> \<open>Send new1b st st2 \<and> recent_msgs st2 = (\<lambda>a2. if a2 = a then [] else recent_msgs st a2) \<and> queued_msg st2 = (\<lambda>a2. if a2 = a then Some new1b else queued_msg st a2)\<close> \<open>type new1b = T1b\<close> qa option.distinct(1) option.sel st2_def)
-  next
-    case False
-    have "(recent_msgs st2 = (
-              \<lambda>a2. if a2 = a then m # recent_msgs st a2 
-                             else recent_msgs st a2))
-          \<and> (msgs st = msgs st2)
-          \<and> (queued_msg st = queued_msg st2)"
-      by (metis (full_types, opaque_lifting) False Process1a.simps assms(2) new1b_def st2_def st_def)
-    have "queued_msg st2 a = None"
-      by (metis AcceptorAction.elims(2) Process1a_Not_Process1bLearnerLoopDone Process1a_Not_Process1bLearnerLoopStep Process1bLearnerLoop.simps Process1b_Not_Process1a \<open>recent_msgs st2 = (\<lambda>a2. if a2 = a then m # recent_msgs st a2 else recent_msgs st a2) \<and> msgs st = msgs st2 \<and> queued_msg st = queued_msg st2\<close> assms(2) qa st_def)
-    have "\<exists>m2 \<in> set (msgs st2). Recv_acc st2 a m2 \<and> (type m2 = T1a \<or> type m2 = T1b)"
-      by (smt (z3) False Process1a.simps Proper_acc.simps Recv_acc.simps Store_acc.elims(2) WellFormed_monotone assms(2) assms(3) list.set_intros(2) new1b_def set_ConsD st2_def st_def)
-    show ?thesis
-      by (metis AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>\<exists>m2\<in>set (msgs st2). Recv_acc st2 a m2 \<and> (type m2 = T1a \<or> type m2 = T1b)\<close> \<open>queued_msg st2 a = None\<close> qa st2_def)
-  qed
-qed
-
-lemma Process1a_Disables_AcceptorAction:
-  assumes "Spec f"
-      and "Process1a a m (f i) (f (1 + i))"
-      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "\<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a))"
-      and "\<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-  using Process1a_Preserves_AcceptorAction assms(1) assms(2) assms(3) apply blast
-  using Process1a_Preserves_AcceptorAction assms(1) assms(2) assms(3) by blast  
-
-lemma Process1b_Preserves_AcceptorAction:
-  assumes "Spec f"
-      and "Process1b a m (f i) (f (1 + i))"
-      and "(\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b) \<or>
-           (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-    shows "Enabled (AcceptorAction a) (f (1 + i))"
-proof -
-  define st where "st = f i"
-  define st2 where "st2 = f (1 + i)"
-  have qa: "AcceptorAction a st st2"
-    by (metis Process1b.elims(2) Process1b_Next_Implies_AcceptorAction Spec.elims(2) Suc_eq_plus1_left assms(1) assms(2) not_Cons_self st2_def st_def)
-  have "\<not> two_a_lrn_loop st a"
-    by (metis AcceptorAction.elims(2) Process1bLearnerLoop.simps Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep assms(2) qa st2_def st_def)
-  then show ?thesis
-  proof (cases "\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b")
-    case True
-    have "two_a_lrn_loop st2 a"
-      using assms(2) True st2_def by force
-    then show ?thesis
-      by (metis AcceptorAction.elims(2) AcceptorAction_Enabled qa st2_def)
-  next
-    case False
-    have "\<not> two_a_lrn_loop st2 a"
-      using False \<open>\<not> two_a_lrn_loop st a\<close> assms(2) st2_def st_def by auto
-    have "queued_msg st2 a = None"
-      by (metis Process1b.elims(2) assms(2) st2_def)
-    have "\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b)"
-      using False assms(3) st_def by blast
-    then have "\<exists>m2 \<in> set (msgs st2). Recv_acc st2 a m2 \<and> (type m2 = T1a \<or> type m2 = T1b)"
-    proof (clarify)
-      fix m2
-      assume "m2 \<in> set (msgs st)"
-         and "m2 \<noteq> m"
-         and "Recv_acc st a m2"
-         and "type m2 = T1a \<or> type m2 = T1b"
-      have "m2 \<in> set (msgs st2)"
-        by (metis Process1b.elims(2) \<open>m2 \<in> set (msgs st)\<close> assms(2) st2_def st_def)
-      have "m2 \<notin> set (known_msgs_acc st2 a)"
-        by (metis Process1b.elims(2) Recv_acc.elims(2) Store_acc.elims(2) \<open>Recv_acc st a m2\<close> \<open>m2 \<noteq> m\<close> assms(2) in_set_member member_rec(1) st2_def st_def)
-      have "WellFormed st2 m2"
-        using Recv_acc.simps Wellformed_Conservation \<open>Recv_acc st a m2\<close> assms(1) le_add2 st2_def st_def by blast
-      have "Proper_acc st2 a m2"
-        by (metis Proper_acc.simps Recv_acc.elims(2) \<open>Recv_acc st a m2\<close> add.commute assms(1) spec_known_msgs_acc_preserved st2_def st_def)
-      have "Recv_acc st2 a m2"
-        using Recv_acc.simps \<open>Proper_acc st2 a m2\<close> \<open>WellFormed st2 m2\<close> \<open>m2 \<notin> set (known_msgs_acc st2 a)\<close> by blast
-      show ?thesis
-        using \<open>Recv_acc st2 a m2\<close> \<open>m2 \<in> set (msgs st2)\<close> \<open>type m2 = T1a \<or> type m2 = T1b\<close> by blast
-    qed
-    then show ?thesis
-      by (metis AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>queued_msg st2 a = None\<close> qa st2_def)
-  qed
-qed
-
-lemma Process1b_Disables_AcceptorAction:
-  assumes "Spec f"
-      and "Process1b a m (f i) (f (1 + i))"
-      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "\<not> (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)"
-      and "\<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
-  using Process1b_Preserves_AcceptorAction assms(1) assms(2) assms(3) apply blast
-  using Process1b_Preserves_AcceptorAction assms(1) assms(2) assms(3) by blast
-
-lemma Process1bLearnerLoopStep_Preserves_AcceptorAction:
-  assumes "Process1bLearnerLoopStep a ln st st2"
-      and "AcceptorAction a st st2"
-    shows "Enabled (AcceptorAction a) st2"
-proof -
-  have "two_a_lrn_loop st a"
-    by (meson AcceptorAction.elims(2) Process1a_Not_Process1bLearnerLoopStep Process1b_Not_Process1bLearnerLoopStep assms(1) assms(2))
-  then show ?thesis
-    by (metis AcceptorAction.elims(2) AcceptorAction_Enabled Process1bLearnerLoopStep.elims(2) assms(1) assms(2))
-qed
-
-lemma Process1bLearnerLoopDone_Preserves_AcceptorAction:
-  assumes "Spec f"
-      and "Process1bLearnerLoopDone a (f i) (f (1 + i))"
-      and "AcceptorAction a (f i) (f (1 + i))"
-      and "\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b)"
-    shows "Enabled (AcceptorAction a) (f (1 + i))"
-proof -
-  have "two_a_lrn_loop (f i) a"
-    by (meson AcceptorAction.elims(2) Process1a_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopDone assms(2) assms(3))
-  have "queued_msg (f i) a = None"
-    using \<open>two_a_lrn_loop (f i) a\<close> assms(1) no_queue_during_loop by blast
-  have "queued_msg (f (1 + i)) a = None"
-    using \<open>queued_msg (f i) a = None\<close> assms(2) by auto
-  have "\<not> two_a_lrn_loop (f (1 + i)) a"
-    using assms(2) by auto
-  have "\<exists>m \<in> set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)"
-    using assms(2) assms(4) by auto
-  show ?thesis
-    by (meson AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>\<exists>m\<in>set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)\<close> \<open>queued_msg (f (1 + i)) a = None\<close> assms(3))
-qed
-
-lemma Process1bLearnerLoopDone_Disables_AcceptorAction:
-  assumes "Spec f"
-      and "Process1bLearnerLoopDone a (f i) (f (1 + i))"
-      and "AcceptorAction a (f i) (f (1 + i))"
-      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "\<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b))"
-  using Process1bLearnerLoopDone_Preserves_AcceptorAction assms(1) assms(2) assms(3) assms(4) by blast
-
-lemma Process1bLearnerLoopDone_Preserves_AcceptorAction_INEQ:
-  assumes "Spec f"
-      and "Process1bLearnerLoopDone a (f i) (f (1 + i))"
-      and "f i \<noteq> f (1 + i)"
-      and "\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b)"
-    shows "Enabled (AcceptorAction a) (f (1 + i))"
-proof -
-  have qa: "AcceptorAction a (f i) (f (1 + i))"
-    by (metis Process1bLearnerLoopDone_Next_Implies_AcceptorAction Spec.elims(2) assms(1) assms(2) assms(3) plus_1_eq_Suc)
-  have "two_a_lrn_loop (f i) a"
-    by (meson AcceptorAction.elims(2) Process1a_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopDone assms(2) qa)
-  have "queued_msg (f i) a = None"
-    using \<open>two_a_lrn_loop (f i) a\<close> assms(1) no_queue_during_loop by blast
-  have "queued_msg (f (1 + i)) a = None"
-    using \<open>queued_msg (f i) a = None\<close> assms(2) by auto
-  have "\<not> two_a_lrn_loop (f (1 + i)) a"
-    using assms(2) by auto
-  have "\<exists>m \<in> set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)"
-    using assms(2) assms(4) by auto
-  show ?thesis
-    by (meson AcceptorAction.elims(2) AcceptorAction_NotEnabled \<open>\<exists>m\<in>set (msgs (f (1 + i))). Recv_acc (f (1 + i)) a m \<and> (type m = T1a \<or> type m = T1b)\<close> \<open>queued_msg (f (1 + i)) a = None\<close> qa)
-qed
-
-lemma Preserves_AcceptorAction_Disabled_Three_Cases:
-  assumes "Spec f"
-      and "Enabled (AcceptorAction a) (f i)"
-      and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "(\<exists>m. Process1a a m (f i) (f (1 + i)) 
-              \<and> \<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a)) 
-              \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
-           (\<exists>m. Process1b a m (f i) (f (1 + i)) 
-              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)
-              \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
-           (Process1bLearnerLoopDone a (f i) (f (1 + i)) 
-              \<and> \<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b)))"
-proof -
-  have "AcceptorAction a (f i) (f (1 + i))"
-    by (metis Spec.elims(2) Suc_eq_plus1_left assms(1) assms(2) assms(3) only_AcceptorAction_disables_AcceptorAction)
-  then have "(\<exists>m. Process1a a m (f i) (f (1 + i))) \<or>
-             (\<exists>m. Process1b a m (f i) (f (1 + i))) \<or>
-             Process1bLearnerLoopDone a (f i) (f (1 + i))"
-    by (meson AcceptorAction.elims(2) Process1bLearnerLoop.elims(2) Process1bLearnerLoopStep_Preserves_AcceptorAction assms(3))
-  then show ?thesis
-  proof (elim disjE)
-    assume "\<exists>m. Process1a a m (f i) (f (1 + i))"
-    then show ?thesis
-      using Process1a_Preserves_AcceptorAction assms(1) assms(3) by blast
-  next
-    assume "\<exists>m. Process1b a m (f i) (f (1 + i))"
-    then show ?thesis
-      by (metis Process1b_Preserves_AcceptorAction assms(1) assms(3))
-  next
-    assume "Process1bLearnerLoopDone a (f i) (f (1 + i))"
-    then show ?thesis
-      using Process1bLearnerLoopDone_Disables_AcceptorAction \<open>AcceptorAction a (f i) (f (1 + i))\<close> assms(1) assms(3) by presburger
-  qed
-qed
 
 lemma LearnerDecide_Enables_Perminent_Next:
   assumes "Spec f"
