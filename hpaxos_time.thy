@@ -937,7 +937,7 @@ lemma Process1a_Disables_AcceptorAction:
 lemma Process1b_Preserves_AcceptorAction:
   assumes "Spec f"
       and "Process1b a m (f i) (f (1 + i))"
-      and "(\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b) \<or>
+      and "(\<forall> mb b :: Ballot. MaxBal (f i) a mb \<and> B m b \<longrightarrow> mb \<le> b) \<or>
            (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
     shows "Enabled (AcceptorAction a) (f (1 + i))"
 proof -
@@ -948,16 +948,16 @@ proof -
   have "\<not> two_a_lrn_loop st a"
     by (metis AcceptorAction.elims(2) Process1bLearnerLoop.simps Process1b_Not_Process1bLearnerLoopDone Process1b_Not_Process1bLearnerLoopStep assms(2) qa st2_def st_def)
   then show ?thesis
-  proof (cases "\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b")
+  proof (cases "\<forall> mb b :: Ballot. MaxBal (f i) a mb \<and> B m b \<longrightarrow> mb \<le> b")
     case True
     have "two_a_lrn_loop st2 a"
-      sorry
+      using Process1b.simps True assms(2) st2_def by presburger
     then show ?thesis
       by (metis AcceptorAction.elims(2) AcceptorAction_Enabled qa st2_def)
   next
     case False
     have "\<not> two_a_lrn_loop st2 a"
-      sorry
+      by (metis False Process1b.elims(2) \<open>\<not> two_a_lrn_loop st a\<close> assms(2) st2_def st_def)
     have "queued_msg st2 a = None"
       by (metis Process1b.elims(2) assms(2) st2_def)
     have "\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b)"
@@ -976,7 +976,7 @@ proof -
       have "WellFormed st2 m2"
         using Recv_acc.simps Wellformed_Conservation \<open>Recv_acc st a m2\<close> assms(1) le_add2 st2_def st_def by blast
       have "Proper_acc st2 a m2"
-        sorry
+        by (metis Proper_acc.elims(1) Recv_acc.elims(2) \<open>Recv_acc st a m2\<close> assms(1) known_msgs_acc_preserved le_add2 st2_def st_def)
       have "Recv_acc st2 a m2"
         using Recv_acc.simps \<open>Proper_acc st2 a m2\<close> \<open>WellFormed st2 m2\<close> \<open>m2 \<notin> set (known_msgs_acc st2 a)\<close> by blast
       show ?thesis

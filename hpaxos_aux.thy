@@ -2329,7 +2329,4 @@ lemma maxbal_absence:
   unfolding MaxBal.simps
 using max_bal_decomp_list_absence by blast
 
-
-
-
 end
