@@ -895,6 +895,26 @@ lemma Acceptor_split:
                         \<and> Process1bLearnerLoopDone A st st2)"
   by (metis AcceptorAction.elims(2) AcceptorProcessAction.elims(2) Process1bLearnerLoop.elims(2) assms)
 
+lemma Acceptor_split_full:
+  assumes "AcceptorProcessAction st st2"
+  shows "(\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2)"
+  by (metis AcceptorAction.elims(2) AcceptorProcessAction.elims(2) Process1bLearnerLoop.elims(2) assms)
+
+
 lemma next_split:
   assumes "Next st st2"
   shows "ProposerSendAction st st2 \<or>
@@ -910,6 +930,53 @@ lemma next_split:
           (\<exists>A :: Acceptor. is_safe A
                         \<and> two_a_lrn_loop st A 
                         \<and> (\<exists>l :: Learner. Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2) \<or>
+          LearnerProcessAction st st2 \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend1b A st st2) \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend2a A st st2)"
+proof -
+  have "Next st st2"
+    using assms(1) by blast
+  then show ?thesis
+    unfolding Next.simps
+  proof (elim disjE)
+    assume "ProposerSendAction st st2"
+    then show ?thesis
+      by blast
+  next
+    assume "AcceptorProcessAction st st2"
+    then show ?thesis
+      by (metis AcceptorAction.simps AcceptorProcessAction.elims(2) Process1bLearnerLoop.simps)
+  next
+    assume "LearnerProcessAction st st2"
+    then show ?thesis
+      by blast
+  next
+    assume "FakeAcceptorAction st st2"
+    then show ?thesis
+      by (meson FakeAcceptorAction.elims(2))
+  qed
+qed
+
+lemma next_split_full:
+  assumes "Next st st2"
+  shows "ProposerSendAction st st2 \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m \<in> set (msgs st). Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)) \<or>
           (\<exists>A :: Acceptor. is_safe A
                         \<and> two_a_lrn_loop st A 
                         \<and> Process1bLearnerLoopDone A st st2) \<or>

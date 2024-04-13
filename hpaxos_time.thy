@@ -578,6 +578,83 @@ lemma Process1bLearnerLoopDone_Not_FakeAcceptorAction :
     shows "\<not> FakeAcceptorAction st st2"
   using FakeAcceptorAction.simps Process1bLearnerLoopDone_Not_FakeSend1b Process1bLearnerLoopDone_Not_FakeSend2a assms by blast
 
+lemma Next_Diff:
+  assumes "Next st st2"
+  shows "st \<noteq> st2 \<or> (\<exists>ln blt val. LearnerDecide ln blt val st st2)"
+proof -
+    have css: "ProposerSendAction st st2 \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                      \<and> queued_msg st A = None 
+                      \<and> (\<exists>m :: PreMessage. Process1a A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A = None 
+                        \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2) \<or>
+          LearnerProcessAction st st2 \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend1b A st st2) \<or>
+          (\<exists>A :: Acceptor. \<not> (is_safe A)
+                        \<and> FakeSend2a A st st2)
+          "
+      by (smt (verit, del_insts) assms(1) next_split_full)
+    then show ?thesis
+    proof (elim disjE)
+      assume "ProposerSendAction st st2"
+      then show ?thesis
+        by (metis ProposerSendAction.elims(2) Send1a.elims(2) not_Cons_self select_convs(1) surjective update_convs(1))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m :: PreMessage. Process1a A m st st2)"
+      then show ?thesis
+        by (meson Process1a.elims(2) Send.simps not_Cons_self)
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> queued_msg st A \<noteq> None 
+                        \<and> Process1b A (the (queued_msg st A)) st st2"
+      then show ?thesis
+        by (metis Process1b.elims(2))
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                  \<and> queued_msg st A = None 
+                  \<and> (\<exists>m \<in> set (msgs st). Process1b A m st st2)"
+      then show ?thesis
+        by (meson Process1b.elims(2) not_Cons_self)
+    next
+      assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)"
+      then show ?thesis
+        by (metis Process1bLearnerLoopStep.elims(2) UnI1 singletonI)
+    next
+      assume "\<exists>A. is_safe A \<and>
+        two_a_lrn_loop st A \<and>
+        Process1bLearnerLoopDone A st st2"
+      then show ?thesis
+        by (smt (verit, best) Process1bLearnerLoopDone.elims(1) ext_inject surjective update_convs(6))
+    next
+      assume "LearnerProcessAction st st2"
+      then show ?thesis
+        by (smt (verit) LearnerAction.elims(2) LearnerProcessAction.elims(1) LearnerRecv.elims(2) not_Cons_self select_convs(3) surjective update_convs(3))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2"
+      show ?thesis
+        by (metis FakeSend1b.elims(1) \<open>\<exists>A. \<not> is_safe A \<and> FakeSend1b A st st2\<close> not_Cons_self select_convs(1) surjective update_convs(1))
+    next
+      assume "\<exists>A. \<not> is_safe A \<and> FakeSend2a A st st2"
+     then show ?thesis
+        by (metis FakeSend2a.simps not_Cons_self select_convs(1) surjective update_convs(1))
+    qed
+qed
+
 lemma Process1bLearnerLoopDone_Next_Implies_AcceptorAction:
   assumes "Next st st2"
       and "Process1bLearnerLoopDone a st st2"
@@ -607,6 +684,77 @@ proof -
       using \<open>Process1bLearnerLoopDone a2 st st2\<close> \<open>\<not> two_a_lrn_loop st2 a\<close> \<open>two_a_lrn_loop st a\<close> surjective by fastforce
     show ?thesis
       using \<open>AcceptorAction a2 st st2\<close> \<open>a = a2\<close> by blast
+  qed
+qed
+
+
+
+lemma Process1bLearnerLoopStep_Not_ProposerSendAction :
+  assumes "Process1bLearnerLoopStep a l st st2"
+    shows "\<not> ProposerSendAction st st2"
+  by (smt (verit) Process1bLearnerLoopStep.elims(2) ProposerSendAction.elims(2) Send1a.elims(2) Store_acc.elims(2) assms not_Cons_self select_convs(1) select_convs(2) surjective update_convs(1))
+
+lemma Process1bLearnerLoopStep_Not_LearnerRecv :
+  assumes "Process1bLearnerLoopStep a l st st2"
+    shows "\<not> LearnerRecv ln m st st2"
+  by (smt (verit) LearnerRecv.elims(2) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) assms ext_inject not_Cons_self surjective update_convs(3))
+
+lemma Process1bLearnerLoopStep_Not_LearnerDecide :
+  assumes "Process1bLearnerLoopStep a l st st2"
+      and "st \<noteq> st2"
+  shows "\<not> LearnerDecide ln blt val st st2"
+  by (smt (verit) LearnerDecide.elims(2) Process1bLearnerLoopStep.elims(2) Un_iff assms(1) assms(2) ext_inject singletonI surjective update_convs(8))
+
+lemma Process1bLearnerLoopStep_Not_LearnerProcessAction :
+  assumes "Process1bLearnerLoopStep a l st st2"
+      and "st \<noteq> st2"
+    shows "\<not> LearnerProcessAction st st2"
+  by (meson LearnerProcessAction.elims LearnerAction.elims(2) Process1bLearnerLoopStep_Not_LearnerDecide Process1bLearnerLoopStep_Not_LearnerRecv assms)
+
+lemma Process1bLearnerLoopStep_Not_FakeSend1b :
+  assumes "Process1bLearnerLoopStep a l st st2"
+    shows "\<not> FakeSend1b a2 st st2"
+  by (smt (verit) FakeSend1b.elims(1) Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) assms ext_inject not_Cons_self surjective update_convs(1))
+
+lemma Process1bLearnerLoopStep_Not_FakeSend2a :
+  assumes "Process1bLearnerLoopStep a l st st2"
+    shows "\<not> FakeSend2a a2 st st2"
+  by (smt (verit) FakeSend2a.simps Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) assms ext_inject not_Cons_self surjective update_convs(1))
+
+lemma Process1bLearnerLoopStep_Not_FakeAcceptorAction :
+  assumes "Process1bLearnerLoopStep a l st st2"
+    shows "\<not> FakeAcceptorAction st st2"
+  using FakeAcceptorAction.simps Process1bLearnerLoopStep_Not_FakeSend1b Process1bLearnerLoopStep_Not_FakeSend2a assms by blast
+
+lemma Process1bLearnerLoopStep_Next_Implies_AcceptorAction:
+  assumes "Next st st2"
+      and "st \<noteq> st2"
+      and "Process1bLearnerLoopStep a l st st2"
+    shows "AcceptorAction a st st2"
+proof -
+  have "AcceptorProcessAction st st2"
+    using Next.simps Process1bLearnerLoopStep_Not_FakeAcceptorAction Process1bLearnerLoopStep_Not_LearnerProcessAction Process1bLearnerLoopStep_Not_ProposerSendAction assms(1) assms(2) assms(3) by blast
+  then have "
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)) \<or>
+          (\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2)"
+    using Acceptor_split_full Process1a_Not_Process1bLearnerLoopStep Process1b_Not_Process1bLearnerLoopStep assms(3) by blast
+  then show ?thesis
+  proof (elim disjE)
+    assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> (\<exists>l :: Learner. l \<notin> processed_lrns st A \<and> Process1bLearnerLoopStep A l st st2)"
+    then show ?thesis
+      by (metis AcceptorAction.simps Process1bLearnerLoop.elims(3) Process1bLearnerLoopStep.elims(2) UnI1 assms(3) singletonI)
+  next
+    assume "\<exists>A :: Acceptor. is_safe A
+                        \<and> two_a_lrn_loop st A 
+                        \<and> Process1bLearnerLoopDone A st st2"
+    then show ?thesis
+      by (smt (verit) Process1bLearnerLoopDone.elims(1) Process1bLearnerLoopStep.elims(2) assms(3) ext_inject surjective update_convs(6))
   qed
 qed
 
