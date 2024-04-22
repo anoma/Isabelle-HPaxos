@@ -1139,7 +1139,7 @@ lemma Process1b_Disables_AcceptorAction:
   assumes "Spec f"
       and "Process1b a m (f i) (f (1 + i))"
       and "\<not> Enabled (AcceptorAction a) (f (1 + i))"
-    shows "\<not> (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)"
+    shows "\<not> (\<forall> mb b :: Ballot. MaxBal (f i) a mb \<and> B m b \<longrightarrow> mb \<le> b)"
       and "\<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))"
   using Process1b_Preserves_AcceptorAction assms(1) assms(2) assms(3) apply blast
   using Process1b_Preserves_AcceptorAction assms(1) assms(2) assms(3) by blast
@@ -1214,7 +1214,7 @@ fun three_cases :: "Acceptor \<Rightarrow> State \<Rightarrow> State \<Rightarro
               \<and> \<not> WellFormed st (M1b a (m # recent_msgs st a)) 
               \<and> \<not> (\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
            (\<exists>m. Process1b a m st st2 
-              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal st a b \<and> B m b \<longrightarrow> mb \<le> b)
+              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal st a mb \<and> B m b \<longrightarrow> mb \<le> b)
               \<and> \<not> (\<exists>m2 \<in> set (msgs st). m2 \<noteq> m \<and> Recv_acc st a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
            (Process1bLearnerLoopDone a st st2 
               \<and> \<not> (\<exists>m \<in> set (msgs st). Recv_acc st a m \<and> (type m = T1a \<or> type m = T1b))))"
@@ -1227,7 +1227,7 @@ lemma Preserves_AcceptorAction_Disabled_Three_Cases_Pre:
               \<and> \<not> WellFormed (f i) (M1b a (m # recent_msgs (f i) a)) 
               \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
            (\<exists>m. Process1b a m (f i) (f (1 + i)) 
-              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal (f i) a b \<and> B m b \<longrightarrow> mb \<le> b)
+              \<and> \<not> (\<forall> mb b :: Ballot. MaxBal (f i) a mb \<and> B m b \<longrightarrow> mb \<le> b)
               \<and> \<not> (\<exists>m2 \<in> set (msgs (f i)). m2 \<noteq> m \<and> Recv_acc (f i) a m2 \<and> (type m2 = T1a \<or> type m2 = T1b))) \<or>
            (Process1bLearnerLoopDone a (f i) (f (1 + i)) 
               \<and> \<not> (\<exists>m \<in> set (msgs (f i)). Recv_acc (f i) a m \<and> (type m = T1a \<or> type m = T1b)))"
@@ -1261,6 +1261,113 @@ lemma Preserves_AcceptorAction_Disabled_Three_Cases:
     shows "three_cases a (f i) (f (1 + i))"
   unfolding three_cases.simps
   using Preserves_AcceptorAction_Disabled_Three_Cases_Pre assms(1) assms(2) assms(3) by presburger
+
+fun max_inv_1:: "PreMessage list \<Rightarrow> bool" where
+  "max_inv_1 x2 = (x2 \<noteq> [] \<and>
+   (\<forall>k \<in> set x2. \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)) \<longrightarrow>
+   (\<exists>mb. (\<exists>k \<in> set x2. M1a mb \<in> Tran k) \<and>
+             (\<forall>k \<in> set x2. (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))))"
+
+lemma max_lem_1:
+  shows "max_inv_1 xs"
+proof (induction xs)
+  case Nil
+  then show ?case
+    by auto
+next
+  case (Cons a xs)
+  fix a xs
+  assume "max_inv_1 xs"
+  have "(\<forall>k\<in>set (a # xs).
+        \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)) \<longrightarrow>
+    (\<exists>mb. (\<exists>k\<in>set (a # xs). M1a mb \<in> Tran k) \<and>
+          (\<forall>k\<in>set (a # xs). \<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))"
+  proof (clarify)
+    assume "\<forall>k\<in>set (a # xs). \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)"
+    then show "\<exists>mb. (\<exists>k\<in>set (a # xs). M1a mb \<in> Tran k) \<and>
+         (\<forall>k\<in>set (a # xs). \<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)"
+    proof (cases "\<exists>mb. M1a mb \<in> Tran a \<and> (\<forall>k\<in>set xs. \<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)")
+      case True
+      then show ?thesis 
+        by (smt (verit, best) \<open>\<forall>k\<in>set (a # xs). \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close> le_trans list.set_intros(1) set_ConsD)
+    next
+      case False 
+      have "max_inv_1 xs"
+        using \<open>max_inv_1 xs\<close> by auto
+      then have "\<forall>k\<in>set xs. \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)"
+        by (simp add: \<open>\<forall>k\<in>set (a # xs). \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close>)
+      then have "\<exists>mb. (\<exists>k\<in>set xs. M1a mb \<in> Tran k) \<and> (\<forall>k\<in>set xs. \<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)"
+        using False \<open>\<forall>k\<in>set (a # xs). \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close> \<open>max_inv_1 xs\<close> by force
+      then show ?thesis
+        by (smt (z3) \<open>\<forall>k\<in>set (a # xs). \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close> dual_order.trans list.set_intros(2) nle_le set_ConsD)
+    qed
+  qed
+  then show "max_inv_1 (a # xs)" 
+    unfolding max_inv_1.simps
+    by blast
+qed
+
+fun max_inv_2:: "PreMessage list \<Rightarrow> bool" where
+  "max_inv_2 x2 = (
+   (\<forall>k \<in> set x2. \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)) \<longrightarrow>
+   (x2 = [] \<or> (\<exists>mb. (\<exists>k \<in> set x2. M1a mb \<in> Tran k) \<and>
+              (\<forall>k \<in> set x2. (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)))))"
+
+lemma max_lem_2:
+  shows "max_inv_2 xs"
+  using max_lem_1 by auto
+
+lemma Messages_Have_Max_Ballots:
+  shows "isValidMessage m \<Longrightarrow> \<exists>mb. B m mb"
+proof (induction m)
+  case (M1a x)
+  then show ?case 
+    using B_1a type.simps(1) by blast
+next
+  case (M1b x1a x2)
+  fix x1a x2
+  assume "(\<And>k. k \<in> set x2 \<Longrightarrow>
+               isValidMessage k \<Longrightarrow>
+               Ex (B k))"
+     and "isValidMessage (M1b x1a x2)"
+  then have "\<forall>k \<in> set x2. isValidMessage k"
+    by (simp add: list.pred_set)
+  then have "\<forall>k \<in> set x2. (\<exists>mb. M1a mb \<in> Tran k \<and>
+        (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))"
+    unfolding B.simps
+    using \<open>\<And>k. \<lbrakk>k \<in> set x2; isValidMessage k\<rbrakk> \<Longrightarrow> Ex (B k)\<close> by fastforce
+  have "x2 \<noteq> []"
+    using \<open>isValidMessage (M1b x1a x2)\<close> by force
+  then have "\<exists>mb. (\<exists>k \<in> set x2. M1a mb \<in> Tran k) \<and>
+             (\<forall>k \<in> set x2. (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))"
+    using max_lem_1 max_inv_1.simps
+    using \<open>\<forall>k\<in>set x2. \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close> by blast
+  then show "\<exists>mb. B (M1b x1a x2) mb"
+    unfolding B.simps Tran.simps    
+    by auto
+next
+  case (M2a x1a x2 x3)
+  fix x1a x2 x3
+  assume "\<And>x3a. x3a \<in> set x3 \<Longrightarrow>
+               isValidMessage x3a \<Longrightarrow>
+               Ex (B x3a)"
+     and "isValidMessage (M2a x1a x2 x3)"
+  then have "\<forall>k \<in> set x3. isValidMessage k"
+    by (simp add: list.pred_set)
+  then have "\<forall>k \<in> set x3. (\<exists>mb. M1a mb \<in> Tran k \<and>
+        (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))"
+    unfolding B.simps
+    using \<open>\<And>k. \<lbrakk>k \<in> set x3; isValidMessage k\<rbrakk> \<Longrightarrow> Ex (B k)\<close> by fastforce
+  have "x3 \<noteq> []"
+    using \<open>isValidMessage (M2a x1a x2 x3)\<close> by force
+  then have "\<exists>mb. (\<exists>k \<in> set x3. M1a mb \<in> Tran k) \<and>
+             (\<forall>k \<in> set x3. (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb))"
+    using max_lem_1 max_inv_1.simps
+    using \<open>\<forall>k\<in>set x3. \<exists>mb. M1a mb \<in> Tran k \<and> (\<forall>b. M1a b \<in> Tran k \<longrightarrow> b \<le> mb)\<close> by blast
+  then show "\<exists>mb. B (M2a x1a x2 x3) mb" 
+    unfolding B.simps Tran.simps    
+    by auto
+qed
 
 
 end
