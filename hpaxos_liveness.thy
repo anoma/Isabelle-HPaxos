@@ -206,43 +206,39 @@ next
   qed
 qed
 
-fun step_1a_constraint_1 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_1 Q b st = (\<forall>a \<in> Q. \<forall> mb :: Ballot. MaxBal st a mb \<longrightarrow> mb \<le> b)"
-fun step_1a_constraint_2 :: "Acceptor \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_2 a st = (queued_msg st a = None)"
-fun step_1a_constraint_3 :: "Acceptor \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_3 a st = (\<not> two_a_lrn_loop st a)"
-fun step_1a_constraint_4 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_4 Q b st = 
+fun step_1a_invariant_1 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
+  "step_1a_invariant_1 Q b st = (\<forall>a \<in> Q. \<forall> mb :: Ballot. MaxBal st a mb \<longrightarrow> mb \<le> b)"
+fun step_1a_invariant_4 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
+  "step_1a_invariant_4 Q b st = 
     (\<forall>a \<in> Q. \<not> (\<exists>M \<in> set (msgs st). M \<noteq> M1a b \<and> Recv_acc st a M \<and> type M = T1a))"
-fun step_1a_constraint_5 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_5 Q b st = 
+fun step_1a_invariant_5 :: "Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
+  "step_1a_invariant_5 Q b st = 
     (\<forall>a\<in>Q. (\<forall>M\<in>set (msgs st).
       (type M = T1b \<or> type M = T2a) \<longrightarrow> (\<exists>mb. B M mb \<and> b \<ge> mb)))"
-fun step_1a_constraint_6 :: "Acceptor \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraint_6 a b st = (\<forall> mb :: Ballot. MaxBal st a mb \<longrightarrow> mb < b)"
-fun step_1a_constraints :: "Acceptor \<Rightarrow> Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
-  "step_1a_constraints a Q b st = (
-      step_1a_constraint_1 Q b st \<and>
-      step_1a_constraint_4 Q b st \<and>
-      step_1a_constraint_5 Q b st \<and>
-      step_1a_constraint_6 a b st
+fun step_1a_invariant_6 :: "Acceptor \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
+  "step_1a_invariant_6 a b st = (\<forall> mb :: Ballot. MaxBal st a mb \<longrightarrow> mb < b)"
+fun step_1a_invariants :: "Acceptor \<Rightarrow> Acceptor set \<Rightarrow> Ballot \<Rightarrow> State \<Rightarrow> bool" where
+  "step_1a_invariants a Q b st = (
+      step_1a_invariant_1 Q b st \<and>
+      step_1a_invariant_4 Q b st \<and>
+      step_1a_invariant_5 Q b st \<and>
+      step_1a_invariant_6 a b st
     )"
 
-lemma step_1a_constraints:
+lemma step_1a_invariants:
   assumes "Spec f"
       and "M1a b \<in> set (msgs (f i))"
       and "is_safe a"
       and "a \<in> Q"
       and "M1a b \<notin> set (known_msgs_acc (f i) a)"
 
-      and "step_1a_constraints a Q b (f i)"
+      and "step_1a_invariants a Q b (f i)"
 
     shows "i < j \<and> M1a b \<notin> set (known_msgs_acc (f j) a) \<and>
            (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
                                   \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))
                                   \<and> (\<forall>a. a \<notin> Q \<longrightarrow> \<not> AcceptorAction a (f k) (f (1 + k))))
-           \<longrightarrow> (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> step_1a_constraints a Q b (f k))"
+           \<longrightarrow> (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> step_1a_invariants a Q b (f k))"
 proof (induction j)
   case 0
   then show ?case
@@ -253,7 +249,7 @@ next
            (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> \<not> ProposerSendAction (f k) (f (1 + k))
                                   \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))
                                   \<and> (\<forall>a. a \<notin> Q \<longrightarrow> \<not> AcceptorAction a (f k) (f (1 + k))))
-           \<longrightarrow> (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> step_1a_constraints a Q b (f k))"
+           \<longrightarrow> (\<forall> k. i \<le> k \<and> k \<le> j \<longrightarrow> step_1a_invariants a Q b (f k))"
   then show ?case
   proof (clarify)
     fix k
@@ -271,16 +267,16 @@ next
                                   \<and> \<not> FakeAcceptorAction (f k) (f (1 + k))
                                   \<and> (\<forall>a. a \<notin> Q \<longrightarrow> \<not> AcceptorAction a (f k) (f (1 + k))))"
       using \<open>i \<le> k\<close> \<open>k \<le> Suc j\<close> block le_Suc_eq by blast
-    show "step_1a_constraints a Q b (f k)"
+    show "step_1a_invariants a Q b (f k)"
     proof (cases "i = k")
       case True
       then show ?thesis
-        using \<open>step_1a_constraints a Q b (f i)\<close> by fastforce
+        using \<open>step_1a_invariants a Q b (f i)\<close> by fastforce
     next
       case False
       have "i < k"
         by (simp add: False \<open>i \<le> k\<close> nat_less_le)
-      then have ihu: "step_1a_constraints a Q b (f j)"
+      then have ihu: "step_1a_invariants a Q b (f j)"
         by (metis \<open>M1a b \<notin> set (known_msgs_acc (f j) a)\<close> \<open>i < Suc j\<close> assms(6) ih ihp less_Suc_eq less_or_eq_imp_le)
       then show ?thesis
       proof (cases "k \<noteq> Suc j")
@@ -291,19 +287,19 @@ next
         case False
         then have "k = Suc j"
           by simp
-        have ihu1: "step_1a_constraint_1 Q b (f j)"
-          using ihu step_1a_constraints.simps by blast
-        have ihu4: "step_1a_constraint_4 Q b (f j)"
-          using ihu step_1a_constraints.simps by blast
-        have ihu5: "step_1a_constraint_5 Q b (f j)"
-          using ihu step_1a_constraints.simps by blast
-        have ihu6: "step_1a_constraint_6 a b (f j)"
-          using ihu step_1a_constraints.simps by blast
+        have ihu1: "step_1a_invariant_1 Q b (f j)"
+          using ihu step_1a_invariants.simps by blast
+        have ihu4: "step_1a_invariant_4 Q b (f j)"
+          using ihu step_1a_invariants.simps by blast
+        have ihu5: "step_1a_invariant_5 Q b (f j)"
+          using ihu step_1a_invariants.simps by blast
+        have ihu6: "step_1a_invariant_6 a b (f j)"
+          using ihu step_1a_invariants.simps by blast
 
         have r1: "\<forall>a \<in> Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a \<longrightarrow> (\<forall> mb :: Ballot. MaxBal (f k) a mb \<longrightarrow> mb \<le> b)"
           using ihu1 False by auto
-        have r4: "(\<forall>m \<in> set (msgs (f (Suc j))). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))) \<longrightarrow> step_1a_constraint_4 Q b (f k)"
-          unfolding step_1a_constraint_4.simps
+        have r4: "(\<forall>m \<in> set (msgs (f (Suc j))). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))) \<longrightarrow> step_1a_invariant_4 Q b (f k)"
+          unfolding step_1a_invariant_4.simps
         proof (clarify)
           fix a M
           assume "\<forall>m\<in>set (msgs (f (Suc j))). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))"
@@ -320,20 +316,20 @@ next
             then have "Recv_acc (f j) a M"
               by (metis MessageType.distinct(1) MessageType.distinct(3) Proper_acc.elims(1) Recv_acc.elims(2) Recv_acc.elims(3) Wellformed_Constant \<open>Recv_acc (f k) a M\<close> \<open>type M = T1a\<close> assms(1) empty_iff ref.simps(1) type.elims)
             then show ?thesis
-              using False \<open>M \<in> set (msgs (f k))\<close> \<open>M \<noteq> M1a b\<close> \<open>\<forall>m\<in>set (msgs (f (Suc j))). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))\<close> \<open>a \<in> Q\<close> \<open>type M = T1a\<close> ihu4 step_1a_constraint_4.simps by blast
+              using False \<open>M \<in> set (msgs (f k))\<close> \<open>M \<noteq> M1a b\<close> \<open>\<forall>m\<in>set (msgs (f (Suc j))). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))\<close> \<open>a \<in> Q\<close> \<open>type M = T1a\<close> ihu4 step_1a_invariant_4.simps by blast
           next
             case False
             then show ?thesis
               using Recv_acc.elims(2) \<open>Recv_acc (f k) a M\<close> by blast
           qed
         qed
-        have r5: "msgs (f (Suc j)) = msgs (f j) \<and> (\<forall>a \<in> Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a) \<longrightarrow> step_1a_constraint_5 Q b (f k)"
+        have r5: "msgs (f (Suc j)) = msgs (f j) \<and> (\<forall>a \<in> Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a) \<longrightarrow> step_1a_invariant_5 Q b (f k)"
           using ihu5
-          unfolding step_1a_constraint_5.simps
+          unfolding step_1a_invariant_5.simps
           by (smt (verit) False MaxBal.simps Proper_acc.elims(1) Recv_acc.simps Wellformed_Constant assms(1))
-        have r6: "known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a \<longrightarrow> step_1a_constraint_6 a b (f k)"
+        have r6: "known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a \<longrightarrow> step_1a_invariant_6 a b (f k)"
           using ihu6
-          unfolding step_1a_constraint_6.simps
+          unfolding step_1a_invariant_6.simps
           by (smt (verit) False MaxBal.simps Proper_acc.elims(1) Recv_acc.simps Wellformed_Constant assms(1))
       show ?thesis
       proof (cases "f j = f (Suc j)")
@@ -349,7 +345,7 @@ next
         have "\<not> (FakeAcceptorAction (f j) (f (Suc j)))"
           by (metis Suc_eq_plus1_left \<open>i < Suc j\<close> ihp le_refl less_Suc_eq_le)
         have "\<forall>m \<in> set (msgs (f j)). \<not> (Process1a a m (f j) (f (Suc j)))"
-          by (metis Process1a.elims(2) Process1a_Req_known_msgs \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1) assms(4) diff_Suc_1 ihu4 step_1a_constraint_4.elims(2))
+          by (metis Process1a.elims(2) Process1a_Req_known_msgs \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> assms(1) assms(4) diff_Suc_1 ihu4 step_1a_invariant_4.elims(2))
         have "\<forall>a. a \<notin> Q \<longrightarrow> (\<forall>m. \<not> (Process1a a m (f j) (f (Suc j))))"
           by (metis Process1a_Next_Implies_AcceptorAction \<open>Next (f j) (f (Suc j))\<close> \<open>i < Suc j\<close> block le_add2 less_Suc_eq_le plus_1_eq_Suc)
         have "\<forall>a. a \<notin> Q \<longrightarrow> (\<forall>m. \<not> (Process1b a m (f j) (f (Suc j))))"
@@ -374,37 +370,37 @@ next
                 using \<open>\<exists>m\<in>set (msgs (f j)). LearnerRecv ln m (f j) (f (Suc j))\<close> by fastforce
               have "\<forall>a \<in> Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a"
                 by (metis (no_types, lifting) LearnerRecv.elims(2) \<open>\<exists>m\<in>set (msgs (f j)). LearnerRecv ln m (f j) (f (Suc j))\<close> ext_inject surjective update_convs(3))
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> r1 by blast
-              have c4: "step_1a_constraint_4 Q b (f k)"
-                unfolding step_1a_constraint_4.simps
-                by (metis \<open>msgs (f j) = msgs (f (Suc j))\<close> r4 step_1a_constraint_4.elims(2))
-              have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
-                by (metis \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>msgs (f j) = msgs (f (Suc j))\<close> r5 step_1a_constraint_5.elims(2))
-              have c6: "step_1a_constraint_6 a b (f k)"
-                unfolding step_1a_constraint_6.simps
-                using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> assms(4) r6 step_1a_constraint_6.simps by blast
+              have c4: "step_1a_invariant_4 Q b (f k)"
+                unfolding step_1a_invariant_4.simps
+                by (metis \<open>msgs (f j) = msgs (f (Suc j))\<close> r4 step_1a_invariant_4.elims(2))
+              have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
+                by (metis \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>msgs (f j) = msgs (f (Suc j))\<close> r5 step_1a_invariant_5.elims(2))
+              have c6: "step_1a_invariant_6 a b (f k)"
+                unfolding step_1a_invariant_6.simps
+                using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> assms(4) r6 step_1a_invariant_6.simps by blast
               then show ?thesis
-                using c1 c4 c5 step_1a_constraints.simps by blast
+                using c1 c4 c5 step_1a_invariants.simps by blast
             next
               assume "\<exists>blt val. LearnerDecide ln blt val (f j) (f (Suc j))"
               have "msgs (f j) = msgs (f (Suc j))"
                 using \<open>\<exists>blt val. LearnerDecide ln blt val (f j) (f (Suc j))\<close> by force
               have "\<forall>a \<in> Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a"
                 using \<open>\<exists>blt val. LearnerDecide ln blt val (f j) (f (Suc j))\<close> by fastforce
-              have "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> r1 by blast
-              have "step_1a_constraint_4 Q b (f k)"
-                unfolding step_1a_constraint_4.simps
-                by (metis \<open>msgs (f j) = msgs (f (Suc j))\<close> r4 step_1a_constraint_4.elims(2))
-              have "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
-                by (metis \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>msgs (f j) = msgs (f (Suc j))\<close> r5 step_1a_constraint_5.elims(2))
+              have "step_1a_invariant_4 Q b (f k)"
+                unfolding step_1a_invariant_4.simps
+                by (metis \<open>msgs (f j) = msgs (f (Suc j))\<close> r4 step_1a_invariant_4.elims(2))
+              have "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
+                by (metis \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>msgs (f j) = msgs (f (Suc j))\<close> r5 step_1a_invariant_5.elims(2))
               then show ?thesis
-                using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>step_1a_constraint_1 Q b (f k)\<close> \<open>step_1a_constraint_4 Q b (f k)\<close> assms(4) r6 step_1a_constraints.simps by blast
+                using \<open>\<forall>a\<in>Q. known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>step_1a_invariant_1 Q b (f k)\<close> \<open>step_1a_invariant_4 Q b (f k)\<close> assms(4) r6 step_1a_invariants.simps by blast
             qed
           qed
         next
@@ -443,7 +439,7 @@ next
               have "type m = T1a"
                 by (meson Process1a.elims(2) \<open>Process1a A m (f j) (f (Suc j))\<close>)
               then have "m = M1a b"
-                by (meson Process1a.elims(2) \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>a. a \<notin> Q \<longrightarrow> (\<forall>m. \<not> Process1a a m (f j) (f (Suc j)))\<close> \<open>m \<in> set (msgs (f j))\<close> ihu4 step_1a_constraint_4.elims(2))
+                by (meson Process1a.elims(2) \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>a. a \<notin> Q \<longrightarrow> (\<forall>m. \<not> Process1a a m (f j) (f (Suc j)))\<close> \<open>m \<in> set (msgs (f j))\<close> ihu4 step_1a_invariant_4.elims(2))
               have "A \<noteq> a"
                 using \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>m\<in>set (msgs (f j)). \<not> Process1a a m (f j) (f (Suc j))\<close> \<open>m \<in> set (msgs (f j))\<close> by fastforce
               have "A \<in> Q"
@@ -463,7 +459,7 @@ next
                 by fastforce
               then have "\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b"
                 using ihu1 
-                unfolding step_1a_constraint_1.simps
+                unfolding step_1a_invariant_1.simps
                 by (metis \<open>A \<in> Q\<close> \<open>M1a b # known_msgs_acc (f j) A = known_msgs_acc (f (Suc j)) A\<close> \<open>k = Suc j\<close> dual_order.trans maxbal_absence not_le_imp_less set_ConsD)
               have "B (M1a b) b"
                 by simp
@@ -474,10 +470,10 @@ next
                 by fastforce
               then have "\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b"
                 using ihu1 
-                unfolding step_1a_constraint_1.simps
+                unfolding step_1a_invariant_1.simps
                 using \<open>\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b\<close> by fastforce
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
               proof (clarify)
                 fix a mb
                 assume "a \<in> Q"
@@ -493,7 +489,7 @@ next
                     using \<open>MaxBal (f k) a mb\<close> \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>a \<in> Q\<close> r1 by blast
                 qed
               qed
-              have c4: "step_1a_constraint_4 Q b (f k)"
+              have c4: "step_1a_invariant_4 Q b (f k)"
                 by (smt (verit) MessageType.distinct(1) MessageType.distinct(3) PreMessage.distinct(1) Process1a.elims(2) Send.elims(2) \<open>\<exists>A. is_safe A \<and> queued_msg (f j) A = None \<and> (\<exists>m\<in>set (msgs (f j)). Process1a A m (f j) (f (Suc j)))\<close> r4 set_ConsD type.elims)
 
               have "(\<forall>ba. (\<forall>m \<in> set (recent_msgs (f j) A). B m ba \<longrightarrow> ba \<le> b))"
@@ -503,8 +499,8 @@ next
               then have "B (M1b A (m # recent_msgs (f j) A)) b"
                 by (simp add: \<open>m = M1a b\<close>)
 
-              have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
+              have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
               proof (clarify)
                 fix a M
                 assume "a \<in> Q"
@@ -514,21 +510,21 @@ next
                 proof (cases "WellFormed (f j) (M1b A (m # recent_msgs (f j) A))")
                   case True
                   then show ?thesis
-                    by (smt (verit) Process1a.elims(2) Send.elims(2) \<open>B (M1a b) b\<close> \<open>B (M1b A (m # recent_msgs (f j) A)) b\<close> \<open>M \<in> set (msgs (f k))\<close> \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>b2. B (M1a b) b2 \<longrightarrow> b2 \<le> b\<close> \<open>a \<in> Q\<close> \<open>k = Suc j\<close> \<open>type M = T1b \<or> type M = T2a\<close> ihu5 set_ConsD step_1a_constraint_5.elims(2))
+                    by (smt (verit) Process1a.elims(2) Send.elims(2) \<open>B (M1a b) b\<close> \<open>B (M1b A (m # recent_msgs (f j) A)) b\<close> \<open>M \<in> set (msgs (f k))\<close> \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>\<forall>b2. B (M1a b) b2 \<longrightarrow> b2 \<le> b\<close> \<open>a \<in> Q\<close> \<open>k = Suc j\<close> \<open>type M = T1b \<or> type M = T2a\<close> ihu5 set_ConsD step_1a_invariant_5.elims(2))
                 next
                   case False
                   have "M \<in> set (msgs (f j))"
                     by (metis False Process1a.elims(2) \<open>M \<in> set (msgs (f k))\<close> \<open>Process1a A m (f j) (f (Suc j))\<close> \<open>k = Suc j\<close>)
                   then show ?thesis
-                    by (meson \<open>a \<in> Q\<close> \<open>type M = T1b \<or> type M = T2a\<close> ihu5 step_1a_constraint_5.elims(2))
+                    by (meson \<open>a \<in> Q\<close> \<open>type M = T1b \<or> type M = T2a\<close> ihu5 step_1a_invariant_5.elims(2))
                 qed
               qed
               
-              have c6: "step_1a_constraint_6 a b (f k)"
+              have c6: "step_1a_invariant_6 a b (f k)"
                 using \<open>A \<noteq> a\<close> \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> r6 by presburger
 
               show ?thesis
-                using c1 c4 c5 c6 step_1a_constraints.simps by presburger
+                using c1 c4 c5 c6 step_1a_invariants.simps by presburger
             qed
           next
             assume "\<exists>A. is_safe A \<and>
@@ -542,7 +538,7 @@ next
                  and "m\<in>set (msgs (f j))"
                  and "Process1b A m (f j) (f (Suc j))"
 
-              have c4: "step_1a_constraint_4 Q b (f k)"
+              have c4: "step_1a_invariant_4 Q b (f k)"
                 by (smt (verit) Process1b.simps \<open>Process1b A m (f j) (f (Suc j))\<close> r4)
 
               have "Recv_acc (f j) A m"
@@ -561,10 +557,10 @@ next
                 by simp
               have "\<forall>mb. B m mb \<longrightarrow> mb \<le> b"
                 using ihu5
-                by (metis B.simps \<open>m \<in> set (msgs (f j))\<close> \<open>type m = T1b\<close> assms(4) nle_le step_1a_constraint_5.elims(2))
+                by (metis B.simps \<open>m \<in> set (msgs (f j))\<close> \<open>type m = T1b\<close> assms(4) nle_le step_1a_invariant_5.elims(2))
               then have "\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b"
                 using ihu1 
-                unfolding step_1a_constraint_1.simps
+                unfolding step_1a_invariant_1.simps
                 by (metis \<open>A \<in> Q\<close> \<open>m # known_msgs_acc (f j) A = known_msgs_acc (f (Suc j)) A\<close> \<open>k = Suc j\<close> dual_order.trans maxbal_absence not_le_imp_less set_ConsD)
               have "(\<forall>ba. (\<forall>m \<in> set (recent_msgs (f j) A). B m ba \<longrightarrow> ba \<le> b))"
                 by (metis RecentMsgsSpec.elims(2) RecentMsgsSpecResult \<open>\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b\<close> \<open>is_safe A\<close> \<open>k = Suc j\<close> assms(1) known_msgs_acc_preserved less_Suc_eq_le nless_le order_refl subsetD)
@@ -573,11 +569,11 @@ next
               then have "\<forall>l. \<forall>mb. B (M2a l A (m # recent_msgs (f j) A)) mb \<longrightarrow> mb \<le> b"
                 using \<open>\<forall>mb. B m mb \<longrightarrow> mb \<le> b\<close> by auto
 
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 by (metis MaxBal.elims(2) \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b\<close> r1)
-              have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
+              have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
               proof (clarify)
                 fix a M
                 assume "a \<in> Q"
@@ -591,12 +587,12 @@ next
 
               have "\<forall>m1 \<in> set (known_msgs_acc (f k) a). m1 = m \<or> m1 \<in> set (known_msgs_acc (f j) a)"
                 by (metis \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>k = Suc j\<close> \<open>m # known_msgs_acc (f j) A = known_msgs_acc (f k) A\<close> set_ConsD)
-              then have c6: "step_1a_constraint_6 a b (f k)"
-                unfolding step_1a_constraint_6.simps
-                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_constraint_1.elims(2))
+              then have c6: "step_1a_invariant_6 a b (f k)"
+                unfolding step_1a_invariant_6.simps
+                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_invariant_1.elims(2))
 
               show ?thesis
-                using c1 c4 c5 c6 step_1a_constraints.simps by presburger
+                using c1 c4 c5 c6 step_1a_invariants.simps by presburger
             qed
           next
             assume "\<exists>A. is_safe A \<and>
@@ -609,7 +605,7 @@ next
                  and "queued_msg (f j) A = Some m"
                  and "Process1b A (the (queued_msg (f j) A)) (f j) (f (Suc j))"
 
-              have c4: "step_1a_constraint_4 Q b (f k)"
+              have c4: "step_1a_invariant_4 Q b (f k)"
                 by (smt (verit) Process1b.simps \<open>Process1b A (the (queued_msg (f j) A)) (f j) (f (Suc j))\<close> r4)
 
               have "Recv_acc (f j) A m"
@@ -630,10 +626,10 @@ next
                 by (metis QueuedMsgResult QueuedMsgSpec1.elims(2) \<open>is_safe A\<close> \<open>queued_msg (f j) A = Some m\<close> assms(1) option.discI option.sel)
               have "\<forall>mb. B m mb \<longrightarrow> mb \<le> b"
                 using ihu5
-                by (metis B.simps \<open>m \<in> set (msgs (f j))\<close> \<open>type m = T1b\<close> assms(4) nle_le step_1a_constraint_5.elims(2))
+                by (metis B.simps \<open>m \<in> set (msgs (f j))\<close> \<open>type m = T1b\<close> assms(4) nle_le step_1a_invariant_5.elims(2))
               then have "\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b"
                 using ihu1 
-                unfolding step_1a_constraint_1.simps
+                unfolding step_1a_invariant_1.simps
                 by (metis \<open>A \<in> Q\<close> \<open>m # known_msgs_acc (f j) A = known_msgs_acc (f (Suc j)) A\<close> \<open>k = Suc j\<close> dual_order.trans maxbal_absence not_le_imp_less set_ConsD)
               have "(\<forall>ba. (\<forall>m \<in> set (recent_msgs (f j) A). B m ba \<longrightarrow> ba \<le> b))"
                 by (metis RecentMsgsSpec.elims(2) RecentMsgsSpecResult \<open>\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b\<close> \<open>is_safe A\<close> \<open>k = Suc j\<close> assms(1) known_msgs_acc_preserved less_Suc_eq_le nless_le order_refl subsetD)
@@ -642,11 +638,11 @@ next
               then have "\<forall>l. \<forall>mb. B (M2a l A (m # recent_msgs (f j) A)) mb \<longrightarrow> mb \<le> b"
                 using \<open>\<forall>mb. B m mb \<longrightarrow> mb \<le> b\<close> by auto
 
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 by (metis MaxBal.elims(2) \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>\<forall>x\<in>set (known_msgs_acc (f k) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b\<close> r1)
-              have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
+              have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
               proof (clarify)
                 fix a M
                 assume "a \<in> Q"
@@ -660,12 +656,12 @@ next
 
               have "\<forall>m1 \<in> set (known_msgs_acc (f k) a). m1 = m \<or> m1 \<in> set (known_msgs_acc (f j) a)"
                 by (metis \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f j) a = known_msgs_acc (f (Suc j)) a\<close> \<open>k = Suc j\<close> \<open>m # known_msgs_acc (f j) A = known_msgs_acc (f k) A\<close> set_ConsD)
-              then have c6: "step_1a_constraint_6 a b (f k)"
-                unfolding step_1a_constraint_6.simps
-                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_constraint_1.elims(2))
+              then have c6: "step_1a_invariant_6 a b (f k)"
+                unfolding step_1a_invariant_6.simps
+                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_invariant_1.elims(2))
 
               show ?thesis
-                using c1 c4 c5 c6 step_1a_constraints.simps by presburger
+                using c1 c4 c5 c6 step_1a_invariants.simps by presburger
             qed
           next
             assume "\<exists>A. is_safe A \<and>
@@ -681,7 +677,7 @@ next
               have "A \<in> Q"
                 using \<open>Process1bLearnerLoopStep A l (f j) (f (Suc j))\<close> \<open>\<forall>a. a \<notin> Q \<longrightarrow> (\<forall>m. \<not> Process1bLearnerLoopStep a m (f j) (f (Suc j)))\<close> by blast
               then have "\<forall>x\<in>set (known_msgs_acc (f j) A). \<forall>b2. B x b2 \<longrightarrow> b2 \<le> b"
-                by (metis dual_order.trans ihu1 linorder_le_cases maxbal_absence nat_less_le step_1a_constraint_1.elims(2))
+                by (metis dual_order.trans ihu1 linorder_le_cases maxbal_absence nat_less_le step_1a_invariant_1.elims(2))
               then have "(\<forall>ba. (\<forall>m \<in> set (recent_msgs (f j) A). B m ba \<longrightarrow> ba \<le> b))"
                 by (meson RecentMsgsSpec.elims(2) RecentMsgsSpecResult \<open>is_safe A\<close> assms(1) subsetD)
               then have "(\<forall>ba. M1a ba \<in> \<Union> (set (map Tran (recent_msgs (f j) A))) \<longrightarrow> ba \<le> b)"
@@ -696,37 +692,37 @@ next
               have "\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f k) a = known_msgs_acc (f j) a"
                 by (metis Process1bLearnerLoopStep.elims(2) Store_acc.elims(2) \<open>Process1bLearnerLoopStep A l (f j) (f (Suc j))\<close> \<open>k = Suc j\<close>)
 
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 by (metis \<open>\<forall>a. a \<noteq> A \<longrightarrow> known_msgs_acc (f k) a = known_msgs_acc (f j) a\<close> \<open>\<forall>mb. MaxBal (f k) A mb \<longrightarrow> mb \<le> b\<close> \<open>k = Suc j\<close> r1)
 
               have "msgs (f k) = msgs (f j) \<or> msgs (f k) = new2a # msgs (f j)"
                 by (metis Process1bLearnerLoopStep.elims(2) Send.elims(1) \<open>Process1bLearnerLoopStep A l (f j) (f (Suc j))\<close> \<open>k = Suc j\<close> new2a_def)
               then have "\<forall>m \<in> set (msgs (f k)). type m = T1a \<longrightarrow> m \<in> set (msgs (f j))"
                 using new2a_def by force
-              then have c4: "step_1a_constraint_4 Q b (f k)"
+              then have c4: "step_1a_invariant_4 Q b (f k)"
                 using ihu4
-                unfolding step_1a_constraint_4.simps
-                by (metis \<open>k = Suc j\<close> r4 step_1a_constraint_4.elims(2))
+                unfolding step_1a_invariant_4.simps
+                by (metis \<open>k = Suc j\<close> r4 step_1a_invariant_4.elims(2))
 
               have "\<forall>m \<in> set (msgs (f k)). type m = T1b \<longrightarrow> m \<in> set (msgs (f j))"
                 using \<open>msgs (f k) = msgs (f j) \<or> msgs (f k) = new2a # msgs (f j)\<close> new2a_def by fastforce
 
 
-              have c6: "step_1a_constraint_6 a b (f k)"
-                unfolding step_1a_constraint_6.simps
-                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_constraint_1.elims(2))
+              have c6: "step_1a_invariant_6 a b (f k)"
+                unfolding step_1a_invariant_6.simps
+                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_invariant_1.elims(2))
 
               have "msgs (f k) = new2a # msgs (f j) \<longrightarrow> (\<exists>mb. B new2a mb)"
                 using Messages_Have_Max_Ballots
-                by (metis Process1bLearnerLoopStep.elims(2) WellFormed.elims(1) \<open>Process1bLearnerLoopStep A l (f j) (f (Suc j))\<close> \<open>k = Suc j\<close> assms(4) ihu5 list.set_intros(1) new2a_def step_1a_constraint_5.elims(2) type.simps(3))
+                by (metis Process1bLearnerLoopStep.elims(2) WellFormed.elims(1) \<open>Process1bLearnerLoopStep A l (f j) (f (Suc j))\<close> \<open>k = Suc j\<close> assms(4) ihu5 list.set_intros(1) new2a_def step_1a_invariant_5.elims(2) type.simps(3))
               then have "msgs (f k) = new2a # msgs (f j) \<longrightarrow> (\<exists>mb. B new2a mb \<and> mb \<le> b)"
                 by (meson \<open>\<forall>l mb. B new2a mb \<longrightarrow> mb \<le> b\<close>)
-              then have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
+              then have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
                 using \<open>msgs (f k) = msgs (f j) \<or> msgs (f k) = new2a # msgs (f j)\<close> ihu5 by auto
               show ?thesis
-                using c1 c4 c5 c6 step_1a_constraints.simps by presburger
+                using c1 c4 c5 c6 step_1a_invariants.simps by presburger
             qed
           next
             assume "\<exists>A. is_safe A \<and>
@@ -738,20 +734,20 @@ next
               assume "is_safe A"
                  and "two_a_lrn_loop (f j) A"
                  and "Process1bLearnerLoopDone A (f j) (f (Suc j))"
-              have c1: "step_1a_constraint_1 Q b (f k)"
-                unfolding step_1a_constraint_1.simps
+              have c1: "step_1a_invariant_1 Q b (f k)"
+                unfolding step_1a_invariant_1.simps
                 using \<open>Process1bLearnerLoopDone A (f j) (f (Suc j))\<close> r1 by auto
-              have c4: "step_1a_constraint_4 Q b (f k)"
-                unfolding step_1a_constraint_4.simps
-                by (smt (verit) Process1bLearnerLoopDone.elims(1) \<open>Process1bLearnerLoopDone A (f j) (f (Suc j))\<close> ext_inject r4 step_1a_constraint_4.elims(2) surjective update_convs(6))
-              have c5: "step_1a_constraint_5 Q b (f k)"
-                unfolding step_1a_constraint_5.simps
+              have c4: "step_1a_invariant_4 Q b (f k)"
+                unfolding step_1a_invariant_4.simps
+                by (smt (verit) Process1bLearnerLoopDone.elims(1) \<open>Process1bLearnerLoopDone A (f j) (f (Suc j))\<close> ext_inject r4 step_1a_invariant_4.elims(2) surjective update_convs(6))
+              have c5: "step_1a_invariant_5 Q b (f k)"
+                unfolding step_1a_invariant_5.simps
                 using \<open>Process1bLearnerLoopDone A (f j) (f (Suc j))\<close> \<open>k = Suc j\<close> ihu5 by auto
-              have c6: "step_1a_constraint_6 a b (f k)"
-                unfolding step_1a_constraint_6.simps
-                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_constraint_1.elims(2))
+              have c6: "step_1a_invariant_6 a b (f k)"
+                unfolding step_1a_invariant_6.simps
+                by (metis B.elims(2) KnownMsgs_accSpec.elims(2) KnownMsgs_accSpecResult MaxBal.simps \<open>M1a b \<notin> set (known_msgs_acc (f (Suc j)) a)\<close> \<open>k = Suc j\<close> assms(1) assms(3) assms(4) c1 in_mono nless_le step_1a_invariant_1.elims(2))
               show ?thesis
-                using c1 c4 c5 c6 step_1a_constraints.simps by presburger
+                using c1 c4 c5 c6 step_1a_invariants.simps by presburger
             qed
           qed
         qed
@@ -1302,7 +1298,7 @@ end
 
 
 (*
-lemma step_1a_constraints:
+lemma step_1a_invariants:
   assumes "Spec f"
       and "M1a b \<in> set (msgs (f i))"
       and "is_safe a"
